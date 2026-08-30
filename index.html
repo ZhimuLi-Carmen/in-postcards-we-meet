@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>首页/index</title>
+    
+    <link rel="stylesheet" href="css/style.css">
+
+    <style>
+        /* --- 1. 字体与基础配置 --- */
+        @font-face {
+            font-family: 'CachetForWeb';
+            src: url('assets/fonts/Cachetforweb-Regular.woff2') format('woff2');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #f4f4f4; 
+            overflow: hidden;
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+        }
+
+        #info {
+            position: absolute;
+            top: 20px;
+            width: 100%;
+            text-align: center;
+            color: #888;
+            font-size: 12px;
+            letter-spacing: 2px;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        /* --- 全局 顶部基础导航 --- */
+        #global-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100px;
+            pointer-events: none;
+            z-index: 999990;
+            mix-blend-mode: difference; 
+        }
+
+        .header-logo {
+            position: absolute;
+            top: 20px; 
+            left: 50%;
+            transform: translateX(-50%);
+            pointer-events: auto;
+        }
+
+        .header-logo img {
+            height: 60px; 
+            display: block;
+            transition: opacity 0.3s ease;
+            filter: brightness(0) invert(1); 
+        }
+
+        .header-logo:hover img {
+            opacity: 0.7;
+        }
+
+        .header-message {
+            position: absolute;
+            top: 35px; 
+            left: 40px; 
+            font-family: 'CachetForWeb', sans-serif;
+            font-size: 1.4rem;
+            color: #ffffff !important; 
+            text-decoration: none;
+            text-transform: lowercase;
+            letter-spacing: 1px;
+            pointer-events: auto;
+            transition: opacity 0.3s ease;
+        }
+
+        .header-message:hover {
+            opacity: 0.7;
+        }
+
+        /* --- 2. 3D 场景与翻折暗示动画 --- */
+        .scene {
+            position: relative;
+            width: 85%; 
+            max-width: 400px; 
+            perspective: 1200px; 
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1;
+        }
+
+        @keyframes flipHint {
+            0% { transform: rotateY(0deg) rotateX(0deg); }
+            10% { transform: rotateY(6deg) rotateX(2deg); } 
+            20% { transform: rotateY(-3deg) rotateX(-1deg); } 
+            30% { transform: rotateY(0deg) rotateX(0deg); }
+            100% { transform: rotateY(0deg) rotateX(0deg); } 
+        }
+
+        .card {
+            width: 100%;
+            position: relative;
+            transition: transform 0.8s cubic-bezier(0.4, 0.2, 0.2, 1);
+            transform-style: preserve-3d;
+            cursor: pointer;
+            animation: flipHint 4s ease-in-out infinite; 
+        }
+
+        .card:hover, .card.is-flipped {
+            animation: none; 
+        }
+
+        .card.is-flipped {
+            transform: rotateY(180deg);
+        }
+
+        .card-face {
+            width: 100%;
+            backface-visibility: hidden; 
+        }
+
+        .card-front {
+            position: relative; 
+            transform: rotateY(0deg);
+        }
+
+        .card-back {
+            position: absolute; 
+            top: 0;
+            left: 0;
+            height: 100%;
+            transform: rotateY(180deg);
+        }
+
+        .card-face img {
+            width: 100%;
+            height: auto; 
+            display: block; 
+            border-radius: 1px; 
+            box-shadow: 0 15px 40px rgba(0,0,0,0.12); 
+        }
+
+        /* --- 3. 独立导航层 --- */
+        .nav-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10; 
+        }
+
+        /* 💡 新增：首页专用的大号中文垫底图层 */
+        .nav-cn-img-big {
+            position: absolute;
+            height: 110px; /* 大尺寸，以衬托 4.5rem 的英文字 */
+            pointer-events: none; /* 绝对穿透，不阻挡交互 */
+            z-index: 1; /* 垫在最下面 */
+            opacity: 0.85;
+            transition: all 0.6s cubic-bezier(0.5, 0, 0.2, 1); /* 保持与英文相同的过渡速度 */
+        }
+
+        .nav-word {
+            position: absolute;
+            pointer-events: auto; 
+            font-family: 'CachetForWeb', sans-serif;
+            font-size: 4.5rem; 
+            text-decoration: none;
+            color: #000000; 
+            transition: all 0.6s cubic-bezier(0.5, 0, 0.2, 1);
+            text-transform: lowercase;
+            white-space: nowrap; 
+            opacity: 1;
+            z-index: 2; /* 浮在中文图层之上 */
+        }
+
+        .nav-word span { display: inline-block; transition: inherit; }
+        .set-base { font-feature-settings: normal; font-weight: normal; }
+        .set-1 { font-feature-settings: "ss01"; font-style: italic; font-weight: 300; }
+        .set-2 { font-feature-settings: "ss02"; letter-spacing: 0.05em; }
+        .set-3 { font-feature-settings: "ss03"; font-weight: bold; letter-spacing: -0.02em; }
+        .set-4 { font-feature-settings: "ss04"; text-transform: uppercase; font-size: 0.85em; }
+
+        /* 坐标控制系，中文图和英文链接共享这四个类名 */
+        .nav-up { top: 0; left: 50%; transform: translate(-50%, -140%); }
+        .nav-down { bottom: 0; left: 50%; transform: translate(-50%, 140%); }
+        .nav-left { left: 0; top: 50%; transform: translate(-140%, -50%); }
+        .nav-right { right: 0; top: 50%; transform: translate(140%, -50%); }
+
+        .card.is-flipped ~ .nav-overlay .nav-up { transform: translate(-50%, -300%); opacity: 0; }
+        .card.is-flipped ~ .nav-overlay .nav-down { transform: translate(-50%, 300%); opacity: 0; }
+        .card.is-flipped ~ .nav-overlay .nav-left { transform: translate(-300%, -50%); opacity: 0; }
+        .card.is-flipped ~ .nav-overlay .nav-right { transform: translate(300%, -50%); opacity: 0; }
+
+        .nav-up:hover { transform: translate(-50%, -140%) scale(1.03) !important; }
+        .nav-down:hover { transform: translate(-50%, 140%) scale(1.03) !important; }
+        .nav-left:hover { transform: translate(-140%, -50%) scale(1.03) !important; }
+        .nav-right:hover { transform: translate(140%, -50%) scale(1.03) !important; }
+
+        /* --- 4. 背面文字排版 --- */
+        .slide-text {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: all 0.8s cubic-bezier(0.4, 0.2, 0.2, 1);
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .top-text {
+            top: -100px; 
+            width: 95%; 
+            max-width: none; 
+            font-size: 0.75rem; 
+            letter-spacing: 0.15em; 
+            line-height: 1.8;
+            text-align: center;
+        }
+
+        .punct {
+            font-family: 'CachetForWeb', sans-serif !important;
+            display: inline-block;
+            transform: scale(1.3);
+            vertical-align: baseline;
+            line-height: 1; 
+        }
+
+        .bottom-text {
+            bottom: 0; 
+            transform: translate(-50%, 80px); 
+            width: 95%; 
+            max-width: 1100px; 
+            color: #000; 
+            font-size: 1.9rem; 
+            font-weight: 900; 
+            line-height: 1.0; 
+            font-family: 'CachetForWeb', sans-serif;
+            text-align: left; 
+            text-shadow: 0 0 0px rgba(255,255,255,1), 0 0 0px rgba(255,255,255,0.8);
+            hyphens: none; 
+            word-wrap: break-word;
+        }
+
+        .top-text.show { top: 6%; opacity: 1; }
+        .bottom-text.show { bottom: 12%; transform: translate(-50%, 0); opacity: 1; }
+
+        /* --- 5. 边缘涂鸦实验层 --- */
+        #scribble-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: hidden; 
+            z-index: 2; 
+            opacity: 0;
+            transition: opacity 0.8s cubic-bezier(0.4, 0.2, 0.2, 1);
+        }
+
+        #scribble-layer.show {
+            opacity: 1;
+        }
+
+        .scribble-mark {
+            position: absolute;
+            font-family: 'CachetForWeb', sans-serif;
+            font-variant-ligatures: contextual;
+            font-feature-settings: "calt" 1, "liga" 1;
+            color: rgba(0, 0, 0, 0.85); 
+            white-space: nowrap;
+        }
+
+        @media (max-width: 600px) {
+            .scene { max-width: 200px; } 
+            .nav-word { font-size: 2.2rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="global-header">
+        <a href="writing-set/color test.html" class="header-message">message</a>
+        <a href="index.html" class="header-logo">
+            <img src="assets/index/greetings.png" alt="Index">
+        </a>
+    </div>
+
+    <div id="info"></div>
+
+    <div id="text-cn" class="slide-text top-text"></div>
+
+    <div id="scribble-layer"></div>
+
+    <div class="scene">
+        <div class="card" id="postcard">
+            <div class="card-face card-front">
+                <img id="img-front" src="" alt="Postcard Front">
+            </div>
+            <div class="card-face card-back">
+                <img id="img-back" src="" alt="Postcard Back">
+            </div>
+        </div>
+
+        <div class="nav-overlay">
+            <img src="assets/chinese/writing.png" class="nav-cn-img-big nav-up" alt="">
+            <img src="assets/chinese/image.png"   class="nav-cn-img-big nav-down" alt="">
+            <img src="assets/chinese/time.png"    class="nav-cn-img-big nav-left" alt="">
+            <img src="assets/chinese/space.png"   class="nav-cn-img-big nav-right" alt="">
+
+            <a href="writing-set/glyphs.html" class="nav-word nav-up" data-word="writing">writing</a>
+            <a href="image-set/river.html" class="nav-word nav-down" data-word="image">image</a>
+            <a href="script-set/script.html" class="nav-word nav-left" data-word="time">time</a>
+            <a href="space-set/space.html" class="nav-word nav-right" data-word="space">space</a>
+        </div>
+    </div>
+
+    <div id="text-en" class="slide-text bottom-text"></div>
+
+    <script src="js/postcardsdata.js"></script> 
+     <script src="../js/screensaver.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const card = document.getElementById('postcard');
+            const imgFront = document.getElementById('img-front');
+            const imgBack = document.getElementById('img-back');
+            const textCn = document.getElementById('text-cn');
+            const textEn = document.getElementById('text-en');
+            const navWords = document.querySelectorAll('.nav-word');
+            const scribbleLayer = document.getElementById('scribble-layer');
+
+            const colors = ['#e16e3c', '#f5cd46', '#f096d2', '#aa9bc8', '#5a50a0', '#50a0dc', '#a0c364', '#785a37', '#2d6e3c'];
+            const fontSets = ['set-base', 'set-1', 'set-2', 'set-3', 'set-4'];
+            
+            const textCnColors = ['#e16e3c', '#f5cd46', '#f096d2', '#aa9bc8', '#5a50a0', '#1e283c', '#50a0dc', '#a0c364', '#785a37', '#2d6e3c'];
+
+            const scribbleTriggers = [
+                '-1-', '-2-', '-3-', '-4-', '-5-', '-6-', '-7-', 
+                '(-1-)', '(-2-)',                                
+                '_1_', '_2_', '_3_', '_4_', '_5_',               
+                '-11>', '-12>', '-13>', '-14>',                  
+                '-21>', '-22>', '-23>',                          
+                '-31>', '-32>', '-33>'                           
+            ];
+
+            navWords.forEach(word => {
+                const text = word.getAttribute('data-word');
+                word.innerHTML = '';
+                for (let i = 0; i < text.length; i++) {
+                    const span = document.createElement('span');
+                    span.innerText = text[i];
+                    const randomSet = fontSets[Math.floor(Math.random() * fontSets.length)];
+                    span.classList.add(randomSet);
+                    word.appendChild(span);
+                }
+            });
+
+            if (typeof postcardPool !== 'undefined' && postcardPool.length > 0) {
+                const randomIndex = Math.floor(Math.random() * postcardPool.length);
+                const randomCard = postcardPool[randomIndex];
+                imgFront.src = `assets/postcards/${randomCard.id}f.JPG`;
+                imgBack.src = `assets/postcards/${randomCard.id}b.JPG`;
+                textEn.innerText = randomCard.en;
+
+                const mainColor = textCnColors[Math.floor(Math.random() * textCnColors.length)];
+                let punctColor = textCnColors[Math.floor(Math.random() * textCnColors.length)];
+                while (punctColor === mainColor) {
+                    punctColor = textCnColors[Math.floor(Math.random() * textCnColors.length)];
+                }
+
+                textCn.style.color = mainColor;
+
+                const punctRegex = /([，。？！；：‘’“”〈〉《》【】—…（）、,.!;:?()\[\]"'-])/g;
+                const rawText = randomCard.cn;
+                
+                const formattedText = rawText.replace(punctRegex, `<span class="punct" style="color: ${punctColor}">$1</span>`);
+                textCn.innerHTML = formattedText;
+            }
+
+            card.addEventListener('click', (e) => {
+                card.style.animation = 'none'; 
+                const isFlippingToBack = !card.classList.contains('is-flipped');
+                card.classList.toggle('is-flipped');
+                textCn.classList.toggle('show');
+                textEn.classList.toggle('show');
+
+                if (isFlippingToBack) {
+                    setTimeout(() => {
+                        scribbleLayer.innerHTML = ''; 
+                        const numScribbles = Math.floor(Math.random() * 4) + 3; 
+                        for(let i = 0; i < numScribbles; i++) {
+                            const mark = document.createElement('span');
+                            mark.className = 'scribble-mark';
+                            mark.innerText = scribbleTriggers[Math.floor(Math.random() * scribbleTriggers.length)];
+                            const fontSize = Math.random() * 20 + 10; 
+                            mark.style.fontSize = `${fontSize}rem`;
+                            const side = Math.floor(Math.random() * 4);
+                            let top, left;
+                            if (side === 0) { top = Math.random() * 15 - 5; left = Math.random() * 100; }        
+                            else if (side === 1) { top = Math.random() * 15 + 90; left = Math.random() * 100; }  
+                            else if (side === 2) { top = Math.random() * 100; left = Math.random() * 15 - 5; }   
+                            else { top = Math.random() * 100; left = Math.random() * 15 + 90; }                  
+                            mark.style.top = `${top}%`;
+                            mark.style.left = `${left}%`;
+                            const rot = Math.random() * 360;
+                            mark.style.transform = `translate(-50%, -50%) rotate(${rot}deg)`;
+                            scribbleLayer.appendChild(mark);
+                        }
+                        requestAnimationFrame(() => { scribbleLayer.classList.add('show'); });
+                    }, 30);
+                } else {
+                    scribbleLayer.classList.remove('show');
+                }
+            });
+
+            // Hover 交互
+            navWords.forEach(word => {
+                word.addEventListener('click', (e) => {
+                    e.stopPropagation(); 
+                    word.style.color = colors[Math.floor(Math.random() * colors.length)];
+                });
+                word.addEventListener('mouseenter', () => {
+                    word.style.color = colors[Math.floor(Math.random() * colors.length)];
+                });
+                word.addEventListener('mouseleave', () => {
+                    word.style.color = '#000000'; 
+                });
+            });
+        });
+    </script>
+</body>
+</html>

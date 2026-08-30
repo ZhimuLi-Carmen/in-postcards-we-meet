@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>明信片写着的文字</title>
+    
+    <link rel="stylesheet" href="../css/style.css">
+    
+    <style>
+        /* =========================================
+           全局字体与样式
+        ========================================= */
+        @font-face {
+            font-family: 'Cachet';
+            src: url('../assets/fonts/Cachetforweb-Regular.woff2') format('woff2'); 
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            margin: 0; padding: 0; overflow: hidden;
+            background-color: #f4f4f4; 
+        }
+
+        .cachet-font { font-family: 'Cachet', sans-serif; }
+
+        /* =========================================
+           瑞士极简侧边栏
+        ========================================= */
+        .swiss-sidebar { position: fixed; left: 40px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 6px; z-index: 10000; align-items: flex-start; }
+        .nav-item { background: transparent; color: rgba(0, 0, 0, 0.3); border: none; padding: 8px 0; cursor: pointer; font-family: 'Cachet', sans-serif; font-size: 30px; text-align: left; text-transform: lowercase; transition: color 0.2s ease, padding-left 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94); position: relative; outline: none; }
+        .nav-item.active { color: #000; padding-left: 15px; }
+        .nav-item.active::before { content: ""; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 8px; height: 1px; background-color: #000; }
+
+        .nav-item .zh-name {
+            display: none;
+            position: absolute;
+            top: 45px; 
+            left: 50%;                    
+            transform: translateX(-50%);  
+            margin-top: 4px;              
+            color: #000;
+            font-size: 14px;
+            font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", sans-serif;
+            font-weight: normal;
+            white-space: nowrap;
+            text-transform: none; 
+            pointer-events: none;
+            letter-spacing: 1px;
+        }
+
+        .nav-item.active .zh-name {
+            transform: translateX(calc(-50% + 7.5px)); 
+        }
+
+        .nav-item:hover .zh-name {
+            display: block;
+        }
+
+        /* =========================================
+           核心容器
+        ========================================= */
+        .page-wrapper { display: none; width: 100vw; height: 100vh; }
+        
+        #page-linear.active { 
+            display: flex; 
+            background-color: #f4f4f4; 
+            overflow-x: auto; 
+            overflow-y: hidden;
+        }
+        #page-linear::-webkit-scrollbar { display: none; }
+        #page-linear { scrollbar-width: none; -ms-overflow-style: none; }
+
+        #page-matrix.active { display: flex; flex-direction: column; background-color: #f6f6f6; }
+        #page-overlap.active { display: block; overflow-y: auto; overflow-x: hidden; padding: 40px 40px 40px 140px; background-color: #fff; }
+
+        /* =========================================
+           Linear 图片弹窗样式 (新增)
+        ========================================= */
+       /* =========================================
+           Linear 图片弹窗样式
+        ========================================= */
+        #linear-image-overlay {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: transparent; /* 1. 去掉遮罩层本身的白色/灰色背景 */
+            display: none; justify-content: center; align-items: center;
+            z-index: 20000; cursor: pointer;
+            opacity: 0; transition: opacity 0.3s ease;
+        }
+        #linear-image-overlay.show {
+            display: flex; opacity: 1;
+        }
+        #linear-image-overlay img {
+            /* 2. 放大图片：将 75vw/vh 调整为 90vw/vh（你也可以改成 100vw 让它撑满屏幕） */
+            max-width: 90vw; max-height: 90vh; 
+            
+            /* 3. 已删除原有的 box-shadow 投影 */
+            
+            /* 4. 关键：利用正片叠底消除 JPG 图片的白色矩形边界，让画面内容直接溶于页面 */
+            mix-blend-mode: multiply; 
+            
+            pointer-events: none; 
+        }
+
+        /* =========================================
+           Linear 独立样式
+        ========================================= */
+        #center-container {
+            margin: auto; 
+            flex-shrink: 0; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            padding: 0 10vw; 
+            z-index: 10;
+        }
+
+        #editable-text {
+            font-size: 15vw; line-height: 1; letter-spacing: 0; outline: none; white-space: nowrap; cursor: text; font-family: 'Cachet', sans-serif; color: #111; font-feature-settings: "lock" 1, "liga" 1, "calt" 0; text-rendering: geometricPrecision; -webkit-font-smoothing: antialiased;
+        }
+
+        #editable-text::selection { background: #111; color: #f4f4f4; }
+
+        /* =========================================
+           Matrix 独立样式
+        ========================================= */
+        #page-matrix { --line-color: #d8d8d8; --ui-color: #888888; --accent-color: #000; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #111; }
+        .main-container { flex: 1; display: flex; width: 100%; overflow: hidden; padding-left: 140px; }
+        .column { flex: 1 1 33.33%; display: flex; flex-direction: column; overflow-y: auto; position: relative; min-width: 150px; container-type: inline-size; }
+        
+        .column-header { 
+            position: sticky; top: 0; background: #f6f6f6; padding: 25px 10px; 
+            border-bottom: 1px solid var(--line-color); 
+            font-family: 'Cachet', sans-serif; font-size: 26px; color: #111; 
+            text-transform: lowercase; text-align: center; z-index: 5; 
+        }
+
+        .resizer { width: 4px; margin: 0 -2px; background-color: transparent; cursor: col-resize; position: relative; z-index: 10; }
+        .resizer::after { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background-color: var(--line-color); transition: background-color 0.2s, width 0.2s; transform: translateX(-50%); }
+        .resizer:hover::after, .resizer.dragging::after { background-color: var(--accent-color); width: 2px; }
+        .glyph-matrix { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        .glyph-matrix td { padding: 4vh 0; font-size: 13cqw; text-align: center; border-bottom: 1px solid var(--line-color); word-break: break-all; }
+        .glyph-matrix tr:hover td { background: rgba(0,0,0,0.03); }
+        .set-base { font-feature-settings: "liga" 1, "calt" 1; }
+        .set-01 { font-feature-settings: "ss01" 1, "liga" 1, "calt" 1; }
+        .set-02 { font-feature-settings: "ss02" 1, "liga" 1, "calt" 1; }
+        .set-03 { font-feature-settings: "ss03" 1, "liga" 1, "calt" 1; }
+        .set-04 { font-feature-settings: "ss04" 1, "liga" 1, "calt" 1; }
+        .column::-webkit-scrollbar { width: 0px; background: transparent; }
+        body.is-dragging { user-select: none; cursor: col-resize; }
+
+        /* =========================================
+           Overlap 独立样式
+        ========================================= */
+        #page-overlap { font-family: 'Cachet', sans-serif; }
+        #grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(10vw, 1fr)); gap: 4vw; max-width: 1400px; margin: 0 auto; transition: opacity 0.4s; }
+        .dimmed #grid-container { opacity: 0.1; pointer-events: none; }
+        .letter-stack { position: relative; height: 12vw; display: flex; justify-content: center; align-items: center; cursor: pointer; transition: transform 0.2s; }
+        .letter-stack:hover { transform: scale(1.1); }
+        .layer { position: absolute; font-size: 8vw; color: transparent; -webkit-text-stroke: 1px #111; white-space: pre; pointer-events: none; transition: opacity 0.3s ease; }
+        
+        .v-0 { font-feature-settings: "liga" 1, "calt" 1; }
+        .v-1 { font-feature-settings: "ss01" 1, "liga" 1, "calt" 1; }
+        .v-2 { font-feature-settings: "ss02" 1, "liga" 1, "calt" 1; }
+        .v-3 { font-feature-settings: "ss03" 1, "liga" 1, "calt" 1; }
+        .v-4 { font-feature-settings: "ss04" 1, "liga" 1, "calt" 1; }
+
+        #lab-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(255, 255, 255, 0.98); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        #lab-display { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; }
+        .big-layer { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 30vw; line-height: 1; text-align: center; color: transparent; -webkit-text-stroke: 2px #000; opacity: 1; transition: opacity 0.4s ease; }
+        .nav-label { position: absolute; width: 45px; height: 45px; border: 1px solid #000; display: flex; justify-content: center; align-items: center; cursor: pointer; background: white; z-index: 1010; border-radius: 50%; font-family: 'Cachet', sans-serif; font-size: 20px; font-feature-settings: "liga" 0, "calt" 0; --base-transform: translate(-50%, -50%); transform: var(--base-transform) scale(1); transition: all 0.2s cubic-bezier(0.19, 1, 0.22, 1); pointer-events: auto; }
+        .nav-label:hover { background: #eee; transform: var(--base-transform) scale(1.15); }
+        .nav-label.active { background: #000; color: #fff; transform: var(--base-transform) scale(1.15); border-color: #000; }
+        
+        /* 💡 优化：Overlap 顶部的 UI 面板样式 */
+        .lab-ui { 
+            position: absolute; top: 40px; width: 100%; display: flex; 
+            justify-content: space-between; padding: 0 40px 0 160px; 
+            box-sizing: border-box; font-size: 22px; /* 放大一点适配 Cachet 字体 */
+            font-family: 'Cachet', sans-serif; /* 改为 Cachet */
+            text-transform: none; /* 移除全大写 */
+            letter-spacing: 0.5px; z-index: 1020; 
+        }
+        #reset-btn { cursor: pointer; text-decoration: none; } /* 移除下划线 */
+        #close-btn { cursor: pointer; }
+
+        /* =========================================
+           悬浮作者信息小方块 (Norm 极简风)
+        ========================================= */
+        #author-tooltip {
+            position: fixed;
+            pointer-events: none; 
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            z-index: 20000;
+            display: flex;
+            flex-direction: column;
+            align-items: center; 
+        }
+        
+        .tooltip-en-box {
+            background-color: #000;
+            color: #fff;
+            padding: 8px 14px;
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            font-size: 13px;
+            letter-spacing: 0.05em;
+            white-space: nowrap;
+            border-radius: 2px;
+            display: inline-block;
+        }
+
+        .cachet-name {
+            font-family: 'Cachet', sans-serif;
+            font-size: 16px; 
+            line-height: 1;
+            font-weight: normal;
+            vertical-align: baseline;
+        }
+
+        .tooltip-zh-box {
+            display: block;
+            margin-top: 6px;     
+            color: #000;         
+            font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", sans-serif;
+            font-size: 13px;
+            font-weight: normal;
+            letter-spacing: 1px;
+            text-transform: none;
+            white-space: nowrap;
+        }
+
+        /* =========================================
+           无缝飞行引擎专用图层
+        ========================================= */
+        #flight-layer { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 9999; }
+        .flight-char {
+            position: absolute; transform: translate(-50%, -50%); color: #111; white-space: pre;
+            transition: left 0.8s cubic-bezier(0.25, 1, 0.35, 1), 
+                        top 0.8s cubic-bezier(0.25, 1, 0.35, 1), 
+                        font-size 0.8s cubic-bezier(0.25, 1, 0.35, 1), 
+                        opacity 0.6s ease;
+        }
+        .invisible-target, .invisible-target * { color: transparent !important; text-shadow: none !important; -webkit-text-stroke: transparent !important; }
+
+        /* =========================================
+           💡 优化：Matrix 页面拖拽提示与表头中文悬浮
+        ========================================= */
+        .resizer::before {
+            content: "◀ \00a0 \00a0 ▶"; /* 使用不换行空格将三角形拉开，保证绝对对称 */
+            position: absolute;
+            top: 40px; 
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 12px;
+            color: #000;
+            pointer-events: none;
+            z-index: 20;
+            width: max-content;
+            letter-spacing: normal; /* 恢复 normal 避免右侧多出隐形宽度 */
+        }
+
+        /* 统一使用此父类实现内部 .zh-name 的完美悬浮居中 */
+        .header-word {
+            position: relative;
+            cursor: default;
+            display: inline-block;
+        }
+        
+        .header-word .zh-name {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-top: 4px;
+            font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", sans-serif;
+            font-size: 14px;
+            color: #000;
+            white-space: nowrap;
+            text-transform: none; 
+            letter-spacing: 1px;
+            font-weight: normal;
+        }
+
+        .header-word:hover .zh-name {
+            display: block;
+        }
+
+        .scroll-hint {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            padding-top: 10px;
+            font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", sans-serif;
+            font-size: 14px;
+            color: #000;
+            pointer-events: none;
+            opacity: 0; 
+            font-weight: normal;
+            letter-spacing: 1px;
+            z-index: 10;
+            text-transform: none;
+        }
+        
+        .column:has(.glyph-matrix tr:hover) .scroll-hint {
+            opacity: 1;
+        }
+
+        /* =========================================
+           Overlap 页面悬浮提示
+        ========================================= */
+        .letter-stack::after {
+            content: "双击查看字形";
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-top: 8px;
+            font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", sans-serif;
+            font-size: 14px;
+            color: #000;
+            white-space: nowrap;
+            pointer-events: none;
+            z-index: 100;
+            font-weight: normal;
+        }
+        .letter-stack:hover::after {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="author-tooltip"></div>
+
+    <nav class="swiss-sidebar">
+        <button class="nav-item active" onclick="switchPage('linear', this)">linear<span class="zh-name">连笔</span></button>
+        <button class="nav-item" onclick="switchPage('matrix', this)">matrix<span class="zh-name">字样</span></button>
+        <button class="nav-item" onclick="switchPage('overlap', this)">overlap<span class="zh-name">重叠</span></button>
+    </nav>
+
+    <div id="flight-layer"></div>
+
+    <div id="linear-image-overlay">
+        <img src="../assets/index/linear.png" alt="Linear Index">
+    </div>
+    <div id="page-linear" class="page-wrapper active">
+        <div id="center-container">
+            <div id="editable-text" contenteditable="true" spellcheck="false">abcdefghijklm<br>nopqrstuvwxyz</div>
+        </div>
+    </div>
+
+    <div id="page-matrix" class="page-wrapper">
+        <div class="main-container" id="container">
+            <div class="column" id="col-upper">
+                <div class="column-header">
+                    <span class="header-word">Uppercase<span class="zh-name">大写</span></span>
+                    <div class="scroll-hint">▼ 下滑查看更多字符</div>
+                </div>
+                <table class="glyph-matrix"><tbody id="body-upper"></tbody></table>
+            </div>
+            <div class="resizer" id="resizer-1"></div>
+            <div class="column" id="col-lower">
+                <div class="column-header">
+                    <span class="header-word">Lowercase<span class="zh-name">小写</span></span>
+                    <div class="scroll-hint">▼ 下滑查看更多字符</div>
+                </div>
+                <table class="glyph-matrix"><tbody id="body-lower"></tbody></table>
+            </div>
+            <div class="resizer" id="resizer-2"></div>
+            <div class="column" id="col-symbols">
+                <div class="column-header">
+                    <span class="header-word">Symbols<span class="zh-name">符号</span></span>
+                    <div class="scroll-hint">▼ 下滑查看更多字符</div>
+                </div>
+                <table class="glyph-matrix"><tbody id="body-symbols"></tbody></table>
+            </div>
+        </div>
+    </div>
+
+    <div id="page-overlap" class="page-wrapper">
+        <div id="grid-container"></div>
+        <div id="lab-overlay">
+            <div class="lab-ui">
+                <div id="reset-btn" class="header-word">Show All Scribble<span class="zh-name">显示所有字形</span></div>
+                <div id="close-btn" class="header-word">✕ close<span class="zh-name">关闭</span></div>
+            </div>
+            <div id="lab-display"></div>
+        </div>
+    </div>
+
+    <script src="../js/postcardsdata.js"></script>    
+    <script src="../js/nav.js"></script>
+     <script src="../js/screensaver.js"></script>
+
+    <script>
+        /* =========================================
+           0. 信息数据字典
+        ========================================= */
+        const authorData = {
+            "A": { 0: "by Alf from Germany", 1: "by Shaye from USA", 2: "by Gelika from Russia", 3: "by Nari from Japan", 4: "by Anouk from The Netherlands" },
+            "a": { 0: "by Bryon from USA", 1: "by Valeska from Germany", 2: "by Denis from Russia", 3: "by Marianne from Finland", 4: "by Lorena from Brazil" },
+            "B": { 0: "by Emily from USA", 1: "by Claus from Germany", 2: "by Sabina from Poland", 3: "by Mau from Japan", 4: "by Nancy from The Netherlands" },
+            "b": { 0: "by Stacey from USA", 1: "by Sybille from Germany", 2: "by Ivana from Czech Republic", 3: "by Kate from Belarus", 4: "by Catherine from Australia" },
+            "C": { 0: "by Cinnamon from USA", 1: "by Heidrun from Germany", 2: "by Ryo from Japan", 3: "by Fabienne from France", 4: "by Maxim from Russia" },
+            "c": { 0: "by Irene from USA", 1: "by Heike from Germany", 2: "by Svetlana from Russia", 3: "by Deepak from India", 4: "by Ina from The Netherlands" },
+            "D": { 0: "by Bret from USA", 1: "by Vanessa from Germany", 2: "by Zaara from Finland", 3: "by Michel from Canada", 4: "by Giancarlo from Italy" },
+            "d": { 0: "by Kathi from USA", 1: "by Katrin from Germany", 2: "by Moeri from Japan", 3: "by Christine from Switzerland", 4: "by Jiri from Czech Republic" },
+            "E": { 0: "by Megan from USA", 1: "by Dagmar from Germany", 2: "by Artur from Russia", 3: "by Pascal from Singapore", 4: "by Carol from UK" },
+            "e": { 0: "by Dennis from USA", 1: "by Julia from Germany", 2: "by Dzmitry from Belarus", 3: "by Dorothe from The Netherlands", 4: "by Christian from Austria" },
+            "F": { 0: "by Natalia from USA", 1: "by Elli from Germany", 2: "by Anja from Finland", 3: "by Ivan from Croatia", 4: "by Sam from Hong Kong" },
+            "f": { 0: "by Mike from USA", 1: "by Birgit from Germany", 2: "by Alex from Russia", 3: "by Cristina from Spain", 4: "by Ewa from Poland" },
+            "G": { 0: "by Brooke from USA", 1: "by Andreas from Germany", 2: "by Zdenka from Czech Republic", 3: "by Susan from Australia", 4: "by Yuk from Hong Kong" },
+            "g": { 0: "by Felice from USA", 1: "by Merle from Germany", 2: "by Haruna from Japan", 3: "by Andrene from Canada", 4: "by Alia from Malaysia" },
+            "H": { 0: "by Sarabeth from USA", 1: "by Thomas from Germany", 2: "by Lida from Russia", 3: "by Hajeong from South Korea", 4: "by Lizekre from The Netherlands" },
+            "h": { 0: "by Eileen from USA", 1: "by Petra from Germany", 2: "by Aristarkas from Finland", 3: "by Luka from Slovenia", 4: "by Mimmo from Italy" },
+            "I": { 0: "by Hilary from USA", 1: "by Heidi from Germany", 2: "by Tonya from Belarus", 3: "by Abdul from Morocco", 4: "by Marysia from Poland" },
+            "i": { 0: "by Diane from USA", 1: "by Eckardt from Germany", 2: "by Yukari from Japan", 3: "by Elena from Russia", 4: "by Črt from Slovenia" },
+            "J": { 0: "by Stacy from USA", 1: "by Elke from Germany", 2: "by Marie from Czech Republic", 3: "by Geert from The Netherlands", 4: "by Lili from Bulgaria" },
+            "j": { 0: "by Dave from USA", 1: "by Alexandra from Germany", 2: "by Sanna from Finland", 3: "by Karenk from Australia", 4: "by Mihnea from Romania" },
+            "K": { 0: "by Kimberly from USA", 1: "by Olaf from Germany", 2: "by Vera from Russia", 3: "by Aurélie from France", 4: "by Jeffry from Indonesia" },
+            "k": { 0: "by Beth from USA", 1: "by Willi from Germany", 2: "by Tarch from Japan", 3: "by Beata from Poland", 4: "by Yaya from Canada" },
+            "L": { 0: "by Tiffany from USA", 1: "by Ira from Germany", 2: "by Tanya from Belarus", 3: "by Julia from Russia", 4: "by Dhivakar from India" },
+            "l": { 0: "by Marcie from USA", 1: "by Viola from Germany", 2: "by Laura from The Netherlands", 3: "by Miki from Japan", 4: "by Sofia from Portugal" },
+            "M": { 0: "by Patrick from USA", 1: "by Holger from Germany", 2: "by Silpa from Finland", 3: "by Ana Martha from Brazil", 4: "by Seamus from Ireland" },
+            "m": { 0: "by Jill from USA", 1: "by Nadia from Germany", 2: "by Miroslav from Czech Republic", 3: "by Rita from Lithuania", 4: "by Marjolein from The Netherlands" },
+            "N": { 0: "by David from USA", 1: "by Babette from Germany", 2: "by Angelina from Russia", 3: "by Kseniya from Russia", 4: "by Kader from Algeria" },
+            "n": { 0: "by Jason from USA", 1: "by Jutta from Germany", 2: "by Ekaterina from Russia", 3: "by Asami from Japan", 4: "by Arnold from The Netherlands" },
+            "O": { 0: "by Stephen from USA", 1: "by Chrissy from Germany", 2: "by Sasha from Ukraine", 3: "by Hiroshi from Japan", 4: "by Jaap from The Netherlands" },
+            "o": { 0: "by Leslie from USA", 1: "by Bernd from Germany", 2: "by Katya from Ukraine", 3: "by Ayu from Japan", 4: "by Ineke from The Netherlands" },
+            "P": { 0: "by Christine from USA", 1: "by Auke from Germany", 2: "by Maksym from Ukraine", 3: "by Yuko from Japan", 4: "by Liesbeth from The Netherlands" },
+            "p": { 0: "by Laura from USA", 1: "by Pia from Germany", 2: "by Yuriy from Ukraine", 3: "by Kaori from Japan", 4: "by Cindy from The Netherlands" },
+            "Q": { 0: "by Amy from USA", 1: "by Martina from Germany", 2: "by Lesia from Ukraine", 3: "by Hinata from Japan", 4: "by Willem from The Netherlands" },
+            "q": { 0: "by Wendy from USA", 1: "by Grit from Germany", 2: "by Anastasiia from Ukraine", 3: "by Osamu from Japan", 4: "by Inez from The Netherlands" },
+            "R": { 0: "by Sarah from USA", 1: "by Nele from Germany", 2: "by Oksana from Ukraine", 3: "by Kanna from Japan", 4: "by Bianca from The Netherlands" },
+            "r": { 0: "by Macie from USA", 1: "by Carina from Germany", 2: "by Yuliya from Ukraine", 3: "by Risa from Japan", 4: "by Anny from The Netherlands" },
+            "S": { 0: "by Meg from USA", 1: "by Klaus from Germany", 2: "by Eldar from Russia", 3: "by Sanae from Japan", 4: "by Mhamin from Singapore" },
+            "s": { 0: "by Mary Ann from USA", 1: "by Jannis from Germany", 2: "by Liza from Russia", 3: "by Angie from Japan", 4: "by Jessie from Singapore" },
+            "T": { 0: "by Kyley from USA", 1: "by Martin from Germany", 2: "by Tania from Russia", 3: "by Nari from Japan", 4: "by Pascal from Singapore" },
+            "t": { 0: "by Rachel from USA", 1: "by Alf from Germany", 2: "by Daria from Russia", 3: "by Mau from Japan", 4: "by Clarence from Singapore" },
+            "U": { 0: "by Margaret from USA", 1: "by Valeska from Germany", 2: "by Max from Russia", 3: "by Moeri from Japan", 4: "by Alia from Malaysia" },
+            "u": { 0: "by Naomi from USA", 1: "by Claus from Germany", 2: "by Denis from Russia", 3: "by Ryo from Japan", 4: "by Mirra from Malaysia" },
+            "V": { 0: "by Eddie from USA", 1: "by Eckardt from Germany", 2: "by Gelika from Russia", 3: "by Haruna from Japan", 4: "by Audrey from Malaysia" },
+            "v": { 0: "by Lizzie from USA", 1: "by Sybille from Germany", 2: "by Elena from Russia", 3: "by Tarch from Japan", 4: "by Amelia from Malaysia" },
+            "W": { 0: "by Gary from USA", 1: "by Heidrun from Germany", 2: "by Svetlana from Russia", 3: "by Yukari from Japan", 4: "by Yuk from Hong Kong" },
+            "w": { 0: "by Sue from USA", 1: "by Heike from Germany", 2: "by Maxim from Russia", 3: "by Miki from Japan", 4: "by Sam from Hong Kong" },
+            "X": { 0: "by Stacy from USA", 1: "by Vanessa from Germany", 2: "by Lyubov from Russia", 3: "by Kanna from Japan", 4: "by Zero from Hong Kong" },
+            "x": { 0: "by Christina from USA", 1: "by Katrin from Germany", 2: "by Artur from Russia", 3: "by Sanae from Japan", 4: "by Augustus from Hong Kong" },
+            "Y": { 0: "by Tim from USA", 1: "by Dagmar from Germany", 2: "by Alex from Russia", 3: "by Risa from Japan", 4: "by Ian from Hong Kong" },
+            "y": { 0: "by Shaye from USA", 1: "by Julia from Germany", 2: "by Ekaterina from Russia", 3: "by Osamu from Japan", 4: "by Monika from Poland" },
+            "Z": { 0: "by Bryon from USA", 1: "by Elli from Germany", 2: "by Vera from Russia", 3: "by Kaori from Japan", 4: "by Sabina from Poland" },
+            "z": { 0: "by Emily from USA", 1: "by Birgit from Germany", 2: "by Angelina from Russia", 3: "by Hinata from Japan", 4: "by Ewa from Poland" }
+        };
+
+        let currentIsolatedChar = "";
+        let currentIsolatedIndex = -1; 
+        const authorTooltip = document.getElementById('author-tooltip');
+
+        function centerLinearPage() {
+            const linearPage = document.getElementById('page-linear');
+            if (linearPage) {
+                linearPage.scrollLeft = (linearPage.scrollWidth - linearPage.clientWidth) / 2;
+            }
+        }
+
+        // 💡 优化：利用 JS 强行聚焦，调出系统原生的真实光标，完美解决假光标移位问题
+        function focusLinearText() {
+            const el = document.getElementById('editable-text');
+            if (el && el.childNodes.length > 0) {
+                el.focus({ preventScroll: true });
+                try {
+                    const range = document.createRange();
+                    const sel = window.getSelection();
+                    // 将光标精确插入到第6个字符（即 f 和 g）之间
+                    let textNode = el.childNodes[0];
+                    if (textNode.nodeType === Node.TEXT_NODE && textNode.length >= 6) {
+                        range.setStart(textNode, 6);
+                        range.collapse(true);
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                    }
+                } catch(e) {
+                    console.error("Cursor placement failed:", e);
+                }
+            }
+        }
+
+        /* =========================================
+           2. 初始化 Matrix 数据 (分拆算法)
+        ========================================= */
+        function fillTableUpper(charString) {
+            const tbody = document.getElementById('body-upper');
+            const variants = ['set-base', 'set-01', 'set-02', 'set-03']; 
+            charString.split('').forEach(char => {
+                const tr = document.createElement('tr');
+                variants.forEach(vClass => {
+                    const td = document.createElement('td');
+                    td.className = `cachet-font ${vClass}`;
+                    td.textContent = char;
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            });
+        }
+
+        function fillTableLower(charString) {
+            const tbody = document.getElementById('body-lower');
+            const variants = ['set-base', 'set-01', 'set-02', 'set-03', 'set-04'];
+            charString.split('').forEach(char => {
+                const tr = document.createElement('tr');
+                variants.forEach(vClass => {
+                    const td = document.createElement('td');
+                    td.className = `cachet-font ${vClass}`;
+                    td.textContent = char;
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            });
+        }
+
+        function fillTableSymbols() {
+            const tbody = document.getElementById('body-symbols');
+            tbody.innerHTML = '';
+            
+            const numbers = "0123456789".split('');
+            
+            const punctuations = [
+                ".", ",", ":", ";", "...", "!", "¡", "?", "¿", "·", 
+                "•", "*", "\"", "#", "/", "\\", "&", "＠", "％", 
+                "-", "–", "—", "_", "~", "(", ")", "{", "}", "[", "]", "<", ">", 
+                "「", "」", "《", "》", "〔", "〕", "『", "』", "【", "】", "〖", "〗",
+                "„", "“", "”", "‘", "’"
+            ];
+            
+            const scribbles = [
+                '-1-', '-2-', '-3-', '-4-', '-5-', '-6-', '-7-', '-8-', '-9-', '-10-', '-11-',
+                '_1_', '_2_', '_3_', '_4_', '_5_', '_6_', '_7_', '_8_', '_9_', '_10_', '_11_', '_12_', '_13_', '_14_', '_15_', '_16_', '_17_',
+                '-11>', '-12>', '-13>', '-14>', '-21>', '-22>', '-23>', '-31>', '-32>',
+                '(-1-)', '(-2-)'
+            ];
+            
+            const maxRows = Math.max(numbers.length, punctuations.length, scribbles.length);
+            
+            for (let i = 0; i < maxRows; i++) {
+                const tr = document.createElement('tr');
+                
+                const tdNum = document.createElement('td');
+                tdNum.className = 'cachet-font set-base';
+                tdNum.textContent = numbers[i] || '';
+                tr.appendChild(tdNum);
+
+                const tdPunct = document.createElement('td');
+                tdPunct.className = 'cachet-font set-base';
+                tdPunct.textContent = punctuations[i] || '';
+                tr.appendChild(tdPunct);
+
+                const tdScrib = document.createElement('td');
+                tdScrib.className = 'cachet-font set-base';
+                tdScrib.textContent = scribbles[i] || '';
+                tr.appendChild(tdScrib);
+
+                tbody.appendChild(tr);
+            }
+        }
+
+        fillTableUpper("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+        fillTableLower("abcdefghijklmnopqrstuvwxyz");
+        fillTableSymbols();
+
+        function makeResizable(resizer, leftCol, rightCol) {
+            let startX = 0, leftStartWidth = 0, rightStartWidth = 0;
+            const onMouseDown = function(e) {
+                startX = e.clientX; leftStartWidth = leftCol.getBoundingClientRect().width; rightStartWidth = rightCol.getBoundingClientRect().width;
+                leftCol.style.flex = 'none'; rightCol.style.flex = 'none'; leftCol.style.width = leftStartWidth + 'px'; rightCol.style.width = rightStartWidth + 'px';
+                resizer.classList.add('dragging'); document.body.classList.add('is-dragging');
+                document.addEventListener('mousemove', onMouseMove); document.addEventListener('mouseup', onMouseUp);
+            };
+            const onMouseMove = function(e) {
+                const dx = e.clientX - startX; const newLeftWidth = leftStartWidth + dx; const newRightWidth = rightStartWidth - dx;
+                if (newLeftWidth > 150 && newRightWidth > 150) { leftCol.style.width = newLeftWidth + 'px'; rightCol.style.width = newRightWidth + 'px'; }
+            };
+            const onMouseUp = function() {
+                resizer.classList.remove('dragging'); document.body.classList.remove('is-dragging');
+                document.removeEventListener('mousemove', onMouseMove); document.removeEventListener('mouseup', onMouseUp);
+            };
+            resizer.addEventListener('mousedown', onMouseDown);
+        }
+        makeResizable(document.getElementById('resizer-1'), document.getElementById('col-upper'), document.getElementById('col-lower'));
+        makeResizable(document.getElementById('resizer-2'), document.getElementById('col-lower'), document.getElementById('col-symbols'));
+
+        /* =========================================
+           3. Linear 打字流逻辑
+        ========================================= */
+        const editableText = document.getElementById('editable-text');
+        editableText.addEventListener('input', function() { if (this.innerHTML.trim() === '') this.innerHTML = '&nbsp;'; });
+        
+        // 👇 新增：将鼠标垂直滚轮事件映射为容器的水平滚动
+        const linearPageEl = document.getElementById('page-linear');
+        linearPageEl.addEventListener('wheel', function(e) {
+            // 确保只有在有上下滚动动作时才干预
+            if (e.deltaY !== 0) {
+                e.preventDefault(); // 阻止浏览器默认的上下滚动行为
+                this.scrollLeft += e.deltaY; // 将垂直滚动值转化为水平滚动距离
+            }
+        }, { passive: false }); // 必须设置为 passive: false 才能生效 preventDefault
+        // 👆 新增结束
+
+        // 👇 新增：双击唤出图片逻辑
+        const linearImgOverlay = document.getElementById('linear-image-overlay');
+        
+        editableText.addEventListener('dblclick', function(e) {
+            // 双击时显示遮罩层
+            linearImgOverlay.classList.add('show');
+            // 清除双击带来的默认文本蓝色选中背景，保持页面干净
+            window.getSelection().removeAllRanges(); 
+        });
+
+        // 点击遮罩层任意位置关闭图片
+        linearImgOverlay.addEventListener('click', function() {
+            this.classList.remove('show');
+        });
+        // 👆 新增结束
+
+        window.onload = () => { 
+            centerLinearPage(); 
+            focusLinearText(); // 💡 页面一加载就召唤真实光标
+        };
+
+        /* =========================================
+           4. Overlap 实验室逻辑
+        ========================================= */
+        const grid = document.getElementById('grid-container');
+        const overlapChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
+        function seededRandom(seed) {
+            return function() {
+                seed = Math.imul(seed ^ seed >>> 15, seed | 1);
+                seed ^= seed + Math.imul(seed ^ seed >>> 7, seed | 61);
+                return ((seed ^ seed >>> 14) >>> 0) / 4294967296;
+            }
+        }
+
+        overlapChars.split('').forEach(char => {
+            const stack = document.createElement('div');
+            stack.className = 'letter-stack';
+            for(let i=0; i<5; i++) {
+                const s = document.createElement('span');
+                s.className = `layer v-${i}`;
+                s.textContent = char;
+                stack.appendChild(s);
+            }
+            stack.onclick = () => openLab(char);
+            grid.appendChild(stack);
+        });
+
+        const overlayLab = document.getElementById('lab-overlay');
+        const displayLab = document.getElementById('lab-display');
+
+        function openLab(char) {
+            currentIsolatedChar = char;
+            currentIsolatedIndex = -1; 
+
+            document.getElementById('page-overlap').classList.add('dimmed');
+            overlayLab.style.display = 'flex';
+            displayLab.innerHTML = ''; 
+
+            for(let i=0; i<5; i++) {
+                const s = document.createElement('div');
+                s.className = `big-layer v-${i} layer-id-${i}`;
+                s.textContent = char;
+                s.style.pointerEvents = 'none'; 
+                displayLab.appendChild(s);
+            }
+
+            setTimeout(() => {
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                document.querySelectorAll('.big-layer').forEach(layer => {
+                    const rect = layer.getBoundingClientRect();
+                    if(rect.left < minX) minX = rect.left; if(rect.top < minY) minY = rect.top;
+                    if(rect.right > maxX) maxX = rect.right; if(rect.bottom > maxY) maxY = rect.bottom;
+                });
+
+                const cx = (maxX + minX) / 2; const cy = (maxY + minY) / 2;
+                const baseRx = (maxX - minX) / 2 + 45; const baseRy = (maxY - minY) / 2 + 45;
+                const rand = seededRandom(char.charCodeAt(0));
+
+                for(let i = 0; i < 5; i++) {
+                    const btn = document.createElement('div');
+                    btn.className = 'nav-label'; btn.textContent = i + 1; btn.dataset.idx = i;
+                    const sectorStart = i * 72; const jitter = 15 + rand() * 42; 
+                    const angle = (sectorStart + jitter) * Math.PI / 180;
+                    const pushOutward = i * 8; 
+                    const x = cx + Math.cos(angle) * (baseRx + pushOutward);
+                    const y = cy + Math.sin(angle) * (baseRy + pushOutward);
+                    
+                    btn.style.left = `${x}px`; btn.style.top = `${y}px`;
+                    
+                    btn.onclick = (e) => {
+                        e.stopPropagation();
+                        const idx = parseInt(btn.dataset.idx);
+                        currentIsolatedIndex = idx; 
+                        
+                        document.querySelectorAll('.nav-label').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        
+                        document.querySelectorAll('.big-layer').forEach((l, li) => {
+                            if (li === idx) {
+                                l.style.opacity = "1";
+                                l.style.pointerEvents = "auto"; 
+                            } else {
+                                l.style.opacity = "0";
+                                l.style.pointerEvents = "none";
+                            }
+                        });
+                    };
+                    displayLab.appendChild(btn);
+                }
+            }, 50);
+        }
+
+        function closeLab() {
+            overlayLab.style.display = 'none';
+            document.getElementById('page-overlap').classList.remove('dimmed');
+            authorTooltip.style.opacity = '0'; 
+        }
+
+        document.getElementById('reset-btn').onclick = (e) => {
+            e.stopPropagation();
+            currentIsolatedIndex = -1; 
+            authorTooltip.style.opacity = '0'; 
+            
+            document.querySelectorAll('.nav-label').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.big-layer').forEach(l => {
+                l.style.opacity = "1";
+                l.style.pointerEvents = "none"; 
+            });
+        };
+
+        document.getElementById('close-btn').onclick = (e) => { e.stopPropagation(); closeLab(); };
+
+        /* =========================================
+           4.5 全局鼠标悬浮 Tooltip 引擎
+        ========================================= */
+        
+        const countryMap = {
+            "Germany": "德国", "USA": "美国", "Russia": "俄罗斯", "Japan": "日本",
+            "The Netherlands": "荷兰", "Finland": "芬兰", "Brazil": "巴西",
+            "Poland": "波兰", "Czech Republic": "捷克", "Belarus": "白俄罗斯",
+            "Australia": "澳大利亚", "France": "法国", "India": "印度",
+            "Canada": "加拿大", "Italy": "意大利", "Switzerland": "瑞士",
+            "Singapore": "新加坡", "UK": "英国", "Hong Kong": "香港",
+            "Spain": "西班牙", "Malaysia": "马来西亚", "South Korea": "韩国",
+            "Slovenia": "斯洛文尼亚", "Morocco": "摩洛哥", "Romania": "罗马尼亚",
+            "Indonesia": "印度尼西亚", "Ireland": "爱尔兰", "Algeria": "阿尔及利亚",
+            "Ukraine": "乌克兰", "Croatia": "克罗地亚"
+        };
+
+        function getFormattedTooltip(char, info) {
+            const regex = /^by\s+(.*?)\s+from\s+(.*)$/i;
+            const match = info.match(regex);
+            
+            if (match) {
+                const name = match[1];
+                const country = match[2];
+                const zhCountry = countryMap[country] || country;
+                
+                return `
+                    <div class="tooltip-en-box"><strong>${char}</strong> by <span class="cachet-name">${name}</span> from ${country}</div>
+                    <div class="tooltip-zh-box">由来自${zhCountry}的${name}写的“${char}”</div>
+                `;
+            }
+            return `<div class="tooltip-en-box"><strong>${char}</strong> ${info}</div>`;
+        }
+
+        document.addEventListener('mousemove', (e) => {
+            let tooltipShown = false;
+
+            if (overlayLab.style.display === 'flex' && currentIsolatedIndex !== -1) {
+                if (e.target.classList.contains('big-layer')) {
+                    const info = (authorData[currentIsolatedChar] && authorData[currentIsolatedChar][currentIsolatedIndex]) 
+                                 ? authorData[currentIsolatedChar][currentIsolatedIndex] 
+                                 : "by Unknown from Archive";
+                    
+                    authorTooltip.innerHTML = getFormattedTooltip(currentIsolatedChar, info);
+                    authorTooltip.style.left = (e.clientX + 15) + 'px';
+                    authorTooltip.style.top = (e.clientY + 15) + 'px';
+                    authorTooltip.style.opacity = '1';
+                    tooltipShown = true;
+                }
+            }
+
+            if (!tooltipShown && document.getElementById('page-linear').classList.contains('active')) {
+                const editableInput = document.getElementById('editable-text');
+                
+                if (e.target === editableInput || editableInput.contains(e.target)) {
+                    let range = null;
+                    if (document.caretRangeFromPoint) {
+                        range = document.caretRangeFromPoint(e.clientX, e.clientY);
+                    } else if (document.caretPositionFromPoint) {
+                        let pos = document.caretPositionFromPoint(e.clientX, e.clientY);
+                        if (pos && pos.offsetNode.nodeType === Node.TEXT_NODE) {
+                            range = document.createRange();
+                            range.setStart(pos.offsetNode, pos.offset);
+                            range.setEnd(pos.offsetNode, pos.offset);
+                        }
+                    }
+
+                    if (range && range.startContainer.nodeType === Node.TEXT_NODE) {
+                        const textNode = range.startContainer;
+                        const text = textNode.nodeValue;
+                        let offset = range.startOffset;
+
+                        if (text && text.length > 0) {
+                            let charIndex = offset;
+                            if (charIndex >= text.length) charIndex = text.length - 1; 
+                            const char = text[charIndex];
+                            
+                            if (/[a-zA-Z]/.test(char)) {
+                                let charRange = document.createRange();
+                                charRange.setStart(textNode, charIndex);
+                                charRange.setEnd(textNode, charIndex + 1);
+                                let rects = charRange.getClientRects();
+                                
+                                let isInside = false;
+                                for (let i = 0; i < rects.length; i++) {
+                                    let r = rects[i];
+                                    if (e.clientX >= r.left - 10 && e.clientX <= r.right + 10 && 
+                                        e.clientY >= r.top - 10 && e.clientY <= r.bottom + 10) {
+                                        isInside = true;
+                                        break;
+                                    }
+                                }
+
+                                if (isInside) {
+                                    const info = (authorData[char] && authorData[char][0]) 
+                                                 ? authorData[char][0] 
+                                                 : "by Unknown from Archive";
+                                    authorTooltip.innerHTML = getFormattedTooltip(char, info);
+                                    authorTooltip.style.left = (e.clientX + 15) + 'px';
+                                    authorTooltip.style.top = (e.clientY + 15) + 'px';
+                                    authorTooltip.style.opacity = '1';
+                                    tooltipShown = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if (!tooltipShown) authorTooltip.style.opacity = '0';
+        });
+
+        /* =========================================
+           5. 飞行引擎
+        ========================================= */
+        function extractPositions(mode) {
+            const positions = [];
+            
+            if (mode === 'linear') {
+                const regex = /\S/; 
+                const el = document.getElementById('editable-text');
+                const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null, false);
+                let textNode;
+                while (textNode = walker.nextNode()) {
+                    const text = textNode.nodeValue;
+                    for (let i = 0; i < text.length; i++) {
+                        if (regex.test(text[i])) {
+                            const range = document.createRange();
+                            range.setStart(textNode, i); range.setEnd(textNode, i + 1);
+                            const rect = range.getBoundingClientRect();
+                            positions.push({
+                                char: text[i], cx: rect.left + rect.width / 2, cy: rect.top + rect.height / 2,
+                                fontSize: window.getComputedStyle(el).fontSize
+                            });
+                        }
+                    }
+                }
+            } else if (mode === 'matrix') {
+                const regex = /[a-zA-Z]/; 
+                document.querySelectorAll('#page-matrix .set-base').forEach(cell => {
+                    const char = cell.textContent.trim();
+                    if (regex.test(char) && char.length === 1) {
+                        const rect = cell.getBoundingClientRect();
+                        positions.push({
+                            char: char, cx: rect.left + rect.width / 2, cy: rect.top + rect.height / 2,
+                            fontSize: window.getComputedStyle(cell).fontSize, el: cell
+                        });
+                    }
+                });
+            } else if (mode === 'overlap') {
+                const regex = /[a-zA-Z]/; 
+                document.querySelectorAll('#page-overlap .letter-stack').forEach(stack => {
+                    const baseLayer = stack.querySelector('.v-0');
+                    if(baseLayer) {
+                        const char = baseLayer.textContent.trim();
+                        if (regex.test(char) && char.length === 1) {
+                            const rect = stack.getBoundingClientRect(); 
+                            positions.push({
+                                char: char, cx: rect.left + rect.width / 2, cy: rect.top + rect.height / 2,
+                                fontSize: window.getComputedStyle(baseLayer).fontSize, el: stack 
+                            });
+                        }
+                    }
+                });
+            }
+            return positions;
+        }
+
+        let isAnimating = false;
+
+        function switchPage(targetMode, btn) {
+            if (isAnimating) return;
+            const pages = ['linear', 'matrix', 'overlap'];
+            const currentMode = pages.find(p => document.getElementById('page-' + p).classList.contains('active'));
+            
+            if (targetMode === currentMode) return;
+            isAnimating = true;
+
+            if(overlayLab.style.display === 'flex') closeLab();
+
+            document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            const startPos = extractPositions(currentMode);
+
+            document.getElementById('page-' + currentMode).classList.remove('active');
+            const targetPage = document.getElementById('page-' + targetMode);
+            targetPage.classList.add('active');
+
+            if (targetMode === 'linear') {
+                centerLinearPage();
+                focusLinearText(); // 💡 切换到 linear 时，也自动召唤真实光标
+            }
+
+            const endPos = extractPositions(targetMode);
+            
+            const flyingGhosts = [];
+            const fadingOutGhosts = [];
+            const fadingInGhosts = [];
+            
+            const targetedEnds = new Set();
+            const targetedStarts = new Set();
+
+            startPos.forEach(s => {
+                let matches = endPos.filter(e => e.char === s.char); 
+                if (matches.length > 0) {
+                    matches.forEach(e => { flyingGhosts.push({ start: s, end: e }); targetedEnds.add(e); });
+                    targetedStarts.add(s);
+                } else {
+                    if (currentMode === 'linear') { fadingOutGhosts.push({ start: s }); }
+                }
+            });
+
+            endPos.forEach(e => {
+                if (!targetedEnds.has(e)) {
+                    if (targetMode === 'linear') { fadingInGhosts.push({ end: e }); }
+                }
+            });
+
+            const layer = document.getElementById('flight-layer');
+            layer.innerHTML = '';
+            const allGhostElements = [];
+
+            flyingGhosts.forEach(g => {
+                const ghost = document.createElement('div');
+                ghost.className = 'flight-char cachet-font';
+                ghost.textContent = g.start.char;
+                ghost.style.left = g.start.cx + 'px'; ghost.style.top = g.start.cy + 'px'; ghost.style.fontSize = g.start.fontSize;
+                layer.appendChild(ghost);
+                allGhostElements.push({ el: ghost, targetX: g.end.cx, targetY: g.end.cy, targetSize: g.end.fontSize, targetOpacity: 1 });
+            });
+
+            fadingOutGhosts.forEach(g => {
+                const ghost = document.createElement('div');
+                ghost.className = 'flight-char cachet-font';
+                ghost.textContent = g.start.char;
+                ghost.style.left = g.start.cx + 'px'; ghost.style.top = g.start.cy + 'px'; ghost.style.fontSize = g.start.fontSize;
+                layer.appendChild(ghost);
+                allGhostElements.push({ el: ghost, targetX: g.start.cx, targetY: g.start.cy, targetSize: g.start.fontSize, targetOpacity: 0 });
+            });
+
+            fadingInGhosts.forEach(g => {
+                const ghost = document.createElement('div');
+                ghost.className = 'flight-char cachet-font';
+                ghost.textContent = g.end.char;
+                ghost.style.left = g.end.cx + 'px'; ghost.style.top = g.end.cy + 'px'; ghost.style.fontSize = g.end.fontSize;
+                ghost.style.opacity = '0'; 
+                layer.appendChild(ghost);
+                allGhostElements.push({ el: ghost, targetX: g.end.cx, targetY: g.end.cy, targetSize: g.end.fontSize, targetOpacity: 1 });
+            });
+
+            if (targetMode === 'matrix' || targetMode === 'overlap') {
+                Array.from(targetedEnds).forEach(e => { if (e.el) e.el.classList.add('invisible-target'); });
+            } else {
+                document.getElementById('editable-text').classList.add('invisible-target');
+            }
+
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    allGhostElements.forEach(g => {
+                        g.el.style.left = g.targetX + 'px';
+                        g.el.style.top = g.targetY + 'px';
+                        g.el.style.fontSize = g.targetSize;
+                        g.el.style.opacity = g.targetOpacity;
+                    });
+                });
+            });
+
+            setTimeout(() => {
+                layer.innerHTML = '';
+                document.querySelectorAll('.invisible-target').forEach(el => el.classList.remove('invisible-target'));
+                isAnimating = false;
+            }, 850);
+        }
+    </script>
+</body>
+</html>

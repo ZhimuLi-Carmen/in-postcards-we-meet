@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>故事发生的剧本</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        /* =========================================
+           字体策略与动态排版变量（完全还原你的设计）
+        ========================================= */
+        :root {
+            --trigger-size: 12px; 
+            --main-text-color: #111;
+        }
+
+        @font-face {
+            font-family: 'Cachet-Full';
+            src: url('../assets/fonts/Cachetforweb-Regular.woff2') format('woff2'); 
+            font-weight: normal; font-style: normal;
+        }
+
+        @font-face {
+            font-family: 'Cachet-Only-Alpha';
+            src: url('../assets/fonts/Cachetforweb-Regular.woff2') format('woff2');
+            unicode-range: U+0030-0039, U+0041-005A, U+0061-007A;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background-color: #f4f4f4; 
+            color: var(--main-text-color); 
+            font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", sans-serif;
+            height: 100vh; overflow: hidden;
+            position: relative;
+        }
+
+        .punct { 
+            color: var(--local-punct-color, #111); 
+            font-family: 'Cachet-Full', "Helvetica Neue", Helvetica, sans-serif; 
+            font-size: 1.2em; 
+            line-height: 1;
+        }
+        
+        .annotation-inline { 
+            color: var(--local-anno-color, #777); 
+            margin: 0 4px; 
+        }
+
+        .inline-title {
+            color: var(--local-punct-color, #111);
+        }
+
+        /* =========================================
+           游戏地图画布层 (Layer 1)
+        ========================================= */
+        #viewport {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: 1; 
+            cursor: grab;
+            overflow: hidden;
+        }
+        #viewport:active { cursor: grabbing; }
+
+        #giant-canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 8000px; 
+            height: 8000px; 
+            padding: 80px 100px 100px 480px; 
+            transform-origin: 0 0;
+        }
+
+        .letter-container {
+            position: absolute; 
+            color: var(--local-main-color, #111);
+            transition: left 0.8s cubic-bezier(0.25, 1, 0.5, 1), top 0.8s cubic-bezier(0.25, 1, 0.5, 1), width 0.3s ease; 
+        }
+
+        .content-wrapper {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+        }
+
+        .story-block {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch; 
+            width: 100%;
+        }
+
+        .idle-huge-letter {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 500px; 
+            font-family: 'Cachet-Full', sans-serif; 
+            color: #000; 
+            pointer-events: none;
+            z-index: 100; 
+            mix-blend-mode: normal; 
+            line-height: 1;
+            text-align: center;
+            will-change: font-feature-settings; 
+        }
+
+        #canvas-letters {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+            will-change: opacity;
+        }
+
+        body.is-idle #canvas-letters {
+            opacity: 0.8; 
+            transition: opacity 0.8s ease; 
+        }
+
+        /* =========================================
+           UI 交互层 (Layer 3 - 贴纸层)
+        ========================================= */
+        #sticker-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 1000; overflow: hidden; }
+        .interactive-sticker { position: absolute; pointer-events: auto; cursor: pointer; will-change: transform; }
+
+        /* =========================================
+           UI 交互层 (Layer 2 - 左侧导航层)
+        ========================================= */
+        .alphabet-nav { 
+            position: fixed; 
+            top: 0; 
+            /* 💡 修复1：将外边距归零，把隐形截断墙推到屏幕最左侧 */
+            left: 0; 
+            /* 💡 修复2：补齐原本的 180px，保持右侧不缩水 */
+            width: 980px; 
+            height: 100vh; 
+            display: block; 
+            z-index: 50; 
+            pointer-events: none; 
+            overflow-y: auto; 
+            overflow-x: hidden;
+            scrollbar-width: none; 
+        }
+        .alphabet-nav::-webkit-scrollbar { display: none; }
+
+        .alphabet-list { 
+            display: flex; flex-direction: column; justify-content: flex-start; 
+            align-items: flex-start; width: 100%; height: auto; 
+            list-style: none; pointer-events: none; 
+            /* 💡 修复3：用内边距顶替刚才的 left（180 + 原本的15 = 195），保证英文原始位置 100% 绝对不变！ */
+            padding: 0 0 0 195px; 
+        }
+        
+        .alphabet-list a { 
+            display: block;
+            width: max-content; 
+            pointer-events: auto; 
+            text-decoration: none; 
+            color: #fff; 
+            font-family: 'Cachet-Full', sans-serif; 
+            font-size: 30px; 
+            font-weight: bold; 
+            
+            -webkit-text-stroke: 3px #000; 
+            stroke-linejoin: round; 
+            paint-order: stroke fill;
+            text-shadow: 0 2px 3px rgba(0,0,0,0.2); 
+            
+            transition: color 0.2s, transform 0.2s; 
+            cursor: pointer; 
+            line-height: 30px; 
+            letter-spacing: 0.5px;
+            margin-bottom: 0px; 
+            white-space: nowrap; 
+            position: relative;
+        }
+
+        .alphabet-list a span { 
+            display: inline-block; 
+            transition: font-feature-settings 0.2s ease, transform 0.2s ease; 
+        }
+
+        .alphabet-list a:hover, .alphabet-list a.active { 
+            color: var(--hover-color, #f5cd46); 
+            transform: translateX(10px) scale(1.05); 
+            z-index: 2;
+        }
+
+        /* =========================================
+           💡 新增：左侧 A-Z 中文悬浮图层
+        ========================================= */
+        .alphabet-list a .zh-name {
+            display: none;
+            position: absolute;
+            right: 100%;             /* 挂在英文标题的左侧 */
+            top: 50%;
+            transform: translateY(-50%); 
+            margin-right: 15px;      
+            
+            /* 强制清除 A-Z 自带的白色填充和黑色粗边 */
+            color: #000 !important;             
+            -webkit-text-stroke: 0px transparent !important; 
+            text-shadow: none !important;       
+            
+            font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", sans-serif !important;
+            font-size: 14px !important;
+            font-weight: normal !important;
+            
+            /* 解决垂直挤压问题：让文字优先平排，到达 160px 宽度后再换成两行 */
+            width: max-content;
+            max-width: 160px;        
+            white-space: normal;     
+            text-align: right;       
+            line-height: 1.4;
+            letter-spacing: 1px;
+            
+            pointer-events: none;    /* 不阻挡任何鼠标交互 */
+            z-index: 999;            
+        }
+
+        /* 选中或悬浮时展示中文 */
+        .alphabet-list a:hover .zh-name {
+            display: block;
+        }
+
+        /* =========================================
+           UI 交互层 (Layer 4 - 反色 UI 面板层)
+        ========================================= */
+        #controls { 
+            position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%); 
+            z-index: 10001; display: flex; align-items: center; gap: 50px; 
+            background: transparent; border: none; padding: 0; 
+            mix-blend-mode: difference; 
+        }
+        .control-group { display: flex; align-items: center; gap: 10px; }
+        
+        #controls label { 
+            font-family: "Cachet-Full", Helvetica, Arial, sans-serif; 
+            font-size: 20px; 
+            color: #fff; 
+            text-transform: lowercase; white-space: nowrap; 
+        }
+        
+        input[type="range"] { -webkit-appearance: none; appearance: none; width: 150px; background: transparent; cursor: pointer; outline: none; }
+        input[type="range"]::-webkit-slider-runnable-track { width: 100%; height: 1px; background: #fff; border: none; } 
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; height: 12px; width: 2px; background: #fff; margin-top: -5px; transition: transform 0.1s ease; } 
+        input[type="range"]:hover::-webkit-slider-thumb { transform: scaleX(4); }
+
+        /* =========================================
+           背景图片与悬浮窗
+        ========================================= */
+        #bg-preview { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 5; pointer-events: none; opacity: 0; transition: opacity 0.4s ease; display: flex; box-shadow: 0 15px 40px rgba(0,0,0,0.15); }
+        #bg-preview.active { opacity: 0.95; }
+        #bg-preview-img { display: block; max-width: 80vw; max-height: 80vh; width: auto; height: auto; filter: grayscale(100%) contrast(1.15) brightness(1.05); border-radius: 2px; }
+        #bg-preview::after { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--local-main-color, transparent); mix-blend-mode: screen; pointer-events: none; }
+        
+        #postcard-tooltip { position: fixed; z-index: 9999; background-color: rgba(255, 255, 255, 0.98); padding: 12px 16px; width: 380px; font-family: 'Cachet-Only-Alpha', "Helvetica Neue", Helvetica, "PingFang SC", sans-serif; font-size: 16px; color: #000; font-weight: bold; line-height: 1.4; pointer-events: none; opacity: 0; visibility: hidden; transition: opacity 0.15s ease; box-shadow: 0 10px 30px rgba(0,0,0,0.12); border: 1px solid rgba(0,0,0,0.08); text-align: justify; text-align-last: auto; border-radius: 2px; }
+        .tt-box { background-color: rgba(255, 255, 255, 0.98); padding: 12px 16px; margin-bottom: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.12); border: 1px solid rgba(0,0,0,0.08); border-radius: 2px; }
+        .tt-box:last-child { margin-bottom: 0; }
+
+        /* =========================================
+           排版细节与交互文字 
+        ========================================= */
+        /*修改中文行距与中文设定*/
+        .article-body { font-family: 'Cachet-Only-Alpha', sans-serif; font-size: 12px; line-height: 1.8; text-align: justify; width: 100%; }
+        
+        .postcard-trigger { 
+            cursor: pointer; 
+            color: #000 !important; 
+            background-color: transparent !important; 
+            padding: 0; border-radius: 0; display: inline; box-decoration-break: clone; -webkit-box-decoration-break: clone; transition: opacity 0.2s, font-size 0.1s ease; 
+            font-family: 'Cachet-Full', sans-serif; 
+            font-size: inherit; 
+            font-weight: bold; 
+            line-height: inherit; 
+            vertical-align: baseline;
+        }
+        .postcard-trigger:hover { opacity: 0.6; }
+
+        .letter-container[data-lang="en"] .article-body { 
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif !important; 
+            font-size: 13.5px; 
+            line-height: 1.4; 
+            text-align: left; 
+            word-break: normal; 
+            hyphens: auto; 
+        }
+        
+        .is-dragging { user-select: none; }
+    </style>
+</head>
+<body>
+
+    <div id="bg-preview"><img id="bg-preview-img" src="" alt=""></div>
+    <div id="sticker-overlay"></div>
+    <div id="postcard-tooltip"></div>
+
+    <nav class="alphabet-nav">
+        <div class="alphabet-list" id="nav-list"></div>
+    </nav>
+
+    <div id="controls">
+        <div class="control-group">
+            <label for="sizeSlider">size: <span id="sizeValue" style="opacity:0.5;">14.0px</span></label>
+            <input type="range" id="sizeSlider" min="14" max="80" step="0.5" value="14">
+        </div>
+        <div class="control-group">
+            <label for="zoomSlider">zoom: <span id="zoomValue" style="opacity:0.5;">1.60x</span></label>
+            <input type="range" id="zoomSlider" min="0.05" max="3.15" step="0.01" value="1.6">
+        </div>
+    </div>
+
+    <div id="viewport">
+        <div id="giant-canvas"></div>
+    </div>
+
+    <script src="../js/scriptsdata.js"></script>
+    <script src="../js/postcardsdata.js"></script>
+    <script src="../js/nav.js"></script>
+     <script src="../js/screensaver.js"></script>
+
+    <script>
+        const palette = ['#e16e3c'/* 橙 */, '#f5cd46'/* 黄 */, '#f096d2'/* 粉 */, '#aa9bc8'/* 浅紫 */, '#5a50a0'/* 深紫 */, '#50a0dc'/* 天蓝 */, '#a0c364'/* 嫩绿 */, '#785a37'/* 棕 */, '#2d6e3c'/* 深绿 */];
+        const warmColors = ['#e16e3c', '#f5cd46', '#f096d2', '#785a37'];
+        const coldColors = ['#aa9bc8', '#5a50a0', '#50a0dc', '#a0c364', '#2d6e3c'];
+        const glyphFeatures = ['normal', '"ss01" 1', '"ss02" 1', '"ss03" 1', '"ss04" 1'];
+
+        const viewport = document.getElementById('viewport');
+        const canvas = document.getElementById('giant-canvas');
+        let cam = { x: 0, y: 0, scale: 1.6 };
+        let isDragging = false;
+        let startPan = { x: 0, y: 0 };
+        
+        let activeBlocks = []; 
+        let targetPairLetter = null; 
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const currentLetter = urlParams.get('letter') || 'A';
+            targetPairLetter = currentLetter; 
+
+            initNavigation();
+            initGiantCanvas();
+            initStickers();
+            initHoverTriggers();
+            initCameraEvents();
+            initSliders();
+            initIdleMode(); 
+
+            setTimeout(() => { flyTo(currentLetter, null, true); }, 300); 
+        });
+
+        function initIdleMode() {
+            let idleTimer = null;
+            const idleDelay = 1500; 
+
+            const resetIdle = () => {
+                if (document.body.classList.contains('is-idle')) {
+                    document.body.classList.remove('is-idle');
+                }
+                clearTimeout(idleTimer);
+                idleTimer = setTimeout(() => {
+                    document.body.classList.add('is-idle');
+                }, idleDelay);
+            };
+
+            window.addEventListener('mousemove', resetIdle);
+            window.addEventListener('mousedown', resetIdle);
+            window.addEventListener('wheel', resetIdle);
+            window.addEventListener('touchstart', resetIdle);
+            window.addEventListener('keydown', resetIdle);
+
+            resetIdle();
+
+            setInterval(() => {
+                if (!document.body.classList.contains('is-idle')) return;
+                const letters = document.querySelectorAll('.idle-huge-letter');
+                letters.forEach(el => {
+                    el.style.fontFeatureSettings = glyphFeatures[Math.floor(Math.random() * glyphFeatures.length)];
+                });
+            }, 1000);
+        }
+
+        function initNavigation() {
+            const navList = document.getElementById('nav-list');
+            navList.innerHTML = '';
+            
+            const topSpacer = document.createElement('div');
+            topSpacer.style.height = '50vh';
+            topSpacer.style.flexShrink = '0';
+            topSpacer.style.width = '100%';
+            navList.appendChild(topSpacer);
+
+            const wordsWrapper = document.createElement('div');
+            wordsWrapper.id = 'words-wrapper';
+            wordsWrapper.style.display = 'flex';
+            wordsWrapper.style.flexDirection = 'column';
+            wordsWrapper.style.width = '100%';
+            navList.appendChild(wordsWrapper);
+            
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").forEach(letter => {
+                const data = scriptsData[letter];
+                if (!data) return;
+
+                let rawWord = data.meta || letter;
+                if (rawWord.toLowerCase().replace(/\s+/g, '').includes('bucketlist')) {
+                    rawWord = 'One Day';
+                }
+
+                let formattedWord = (rawWord === 'One Day') ? 'One Day' : rawWord.charAt(0).toUpperCase() + rawWord.slice(1).toLowerCase();
+                
+                const a = document.createElement('a');
+                a.dataset.letter = letter;
+
+                let wordHtml = '';
+                for(let i = 0; i < formattedWord.length; i++) {
+                    if (formattedWord[i] === ' ') {
+                        wordHtml += `<span style="white-space: pre;"> </span>`;
+                    } else {
+                        wordHtml += `<span>${formattedWord[i]}</span>`;
+                    }
+                }
+                
+                // 💡 修复4：将中文加入并用 div 包裹，这样完美避开 span 的字体随机跳动动画
+                if (data.titleZh) {
+                    wordHtml += `<div class="zh-name">${data.titleZh}</div>`;
+                }
+
+                a.innerHTML = wordHtml;
+                a.style.setProperty('--hover-color', palette[Math.floor(Math.random() * palette.length)]);
+
+                const spans = a.querySelectorAll('span');
+                spans.forEach(span => {
+                    span.style.fontFeatureSettings = glyphFeatures[Math.floor(Math.random() * glyphFeatures.length)];
+                });
+
+                a.onclick = (e) => {
+                    targetPairLetter = letter; 
+                    scatterBlocks(); 
+                    
+                    setTimeout(() => {
+                        flyTo(letter, e);
+                    }, 50);
+
+                    spans.forEach(span => {
+                        span.style.fontFeatureSettings = glyphFeatures[Math.floor(Math.random() * glyphFeatures.length)];
+                    });
+                };
+
+                wordsWrapper.appendChild(a);
+            });
+
+            const bottomSpacer = document.createElement('div');
+            bottomSpacer.style.height = '50vh';
+            bottomSpacer.style.flexShrink = '0';
+            bottomSpacer.style.width = '100%';
+            navList.appendChild(bottomSpacer);
+
+            const centerNav = () => {
+                const nav = document.querySelector('.alphabet-nav');
+                if (nav && wordsWrapper && topSpacer) {
+                    const centerOfWrapper = topSpacer.offsetHeight + (wordsWrapper.offsetHeight / 2);
+                    nav.scrollTop = centerOfWrapper - (nav.clientHeight / 2);
+                }
+            };
+
+            if (document.fonts && document.fonts.ready) {
+                document.fonts.ready.then(() => {
+                    centerNav();
+                    setTimeout(centerNav, 150); 
+                });
+            } else {
+                setTimeout(centerNav, 500); 
+            }
+        }
+
+        function wrapPunctuation(text) {
+            const punctRegex = /([，。！？；：“”‘’（）《》〈〉「」『』——……、,.\?!;:\(\)\-—])/g;
+            return text.replace(punctRegex, `<span class="punct">$1</span>`);
+        }
+
+        function renderDataBlock(contentArr, annoArr, lang, triggers) {
+            let mixed = [];
+            const cleanText = (txt) => txt.replace(/<br\s*\/?>/gi, ' ').trim();
+            
+            if (contentArr && Array.isArray(contentArr)) {
+                const cleanedContent = contentArr.filter(t => cleanText(t) !== '');
+                mixed.push(...cleanedContent.map(t => wrapPunctuation(cleanText(t))));
+            }
+            if (annoArr && Array.isArray(annoArr)) {
+                const cleanedAnno = annoArr.filter(t => cleanText(t) !== '');
+                cleanedAnno.forEach(anno => {
+                    let insertIndex = Math.floor(Math.random() * (mixed.length + 1));
+                    mixed.splice(insertIndex, 0, `<span class="annotation-inline">${wrapPunctuation(cleanText(anno))}</span>`);
+                });
+            }
+
+            let separator = lang === 'en' ? ' ' : '';
+            let htmlStr = mixed.join(separator);
+
+            if (triggers) {
+                for (const [triggerId, triggerData] of Object.entries(triggers)) {
+                    const langData = triggerData[lang];
+                    if(!langData) continue;
+                    const safeTooltip = langData.tooltip.replace(/"/g, '&quot;');
+                    const spanHtml = `<span class="postcard-trigger" data-bg="${triggerData.bg}" data-original="${safeTooltip}">${langData.text}</span>`;
+                    const regex = new RegExp(`\\{\\{${triggerId}\\}\\}`, 'g');
+                    htmlStr = htmlStr.replace(regex, spanHtml);
+                }
+            }
+            return htmlStr;
+        }
+
+        function initGiantCanvas() {
+            canvas.innerHTML = `
+                <div id="canvas-texts" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></div>
+                <div id="canvas-letters"></div>
+            `;
+            const textsLayer = document.getElementById('canvas-texts');
+            const lettersLayer = document.getElementById('canvas-letters');
+
+            activeBlocks = [];
+            
+            let alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+            for (let i = alphabet.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [alphabet[i], alphabet[j]] = [alphabet[j], alphabet[i]];
+            }
+            
+            alphabet.forEach((letter) => {
+                const data = scriptsData[letter];
+                if (!data) return;
+
+                const colorsChoice = Math.random() > 0.5;
+                const groupMainColors = colorsChoice ? warmColors : coldColors;
+                const groupPunctColors = colorsChoice ? coldColors : warmColors;
+
+                const sharedMainColor = groupMainColors[Math.floor(Math.random() * groupMainColors.length)];
+                let sharedAnnoColor;
+                do { 
+                    sharedAnnoColor = groupMainColors[Math.floor(Math.random() * groupMainColors.length)]; 
+                } while (sharedAnnoColor === sharedMainColor && groupMainColors.length > 1);
+                
+                const sharedPunctColor = groupPunctColors[Math.floor(Math.random() * groupPunctColors.length)];
+
+                let zhHtml = renderDataBlock(data.contentZh, data.annotationsZh, 'zh', data.triggers);
+                let enHtml = renderDataBlock(data.contentEn, data.annotationsEn, 'en', data.triggers);
+
+                let zhTitleStr = `<span class="inline-title">##${data.titleZh}##</span> `;
+                let enTitleStr = `<span class="inline-title">##${data.meta}##</span> `;
+
+                const lenZH = data.contentZh ? data.contentZh.join('').length : 0;
+                const lenEN = data.contentEn ? data.contentEn.join('').length : 0;
+
+                let ratioZH = Math.random() > 0.5 ? 1.4 : 0.666;
+                let baseWidthZH = Math.sqrt(lenZH * 380 * ratioZH) * (0.85 + Math.random() * 0.3);
+                baseWidthZH = Math.max(220, Math.min(baseWidthZH, 750));
+
+                const elZH = document.createElement('div');
+                elZH.className = 'letter-container';
+                elZH.id = `container-${letter}-zh`;
+                elZH.dataset.letter = letter;
+                elZH.dataset.lang = 'zh';
+                elZH.dataset.baseWidth = baseWidthZH;
+                elZH.style.width = `${baseWidthZH}px`;
+                elZH.style.setProperty('--local-main-color', sharedMainColor); 
+                elZH.style.setProperty('--local-anno-color', sharedAnnoColor);
+                elZH.style.setProperty('--local-punct-color', sharedPunctColor); 
+                elZH.innerHTML = `
+                    <div class="content-wrapper">
+                        <div class="story-block">
+                            <div class="article-body">${zhTitleStr}${zhHtml}</div>
+                        </div>
+                    </div>
+                `;
+                textsLayer.appendChild(elZH);
+                activeBlocks.push(elZH);
+
+                let ratioEN = Math.random() > 0.5 ? 1.5 : 0.7;
+                let baseWidthEN = Math.sqrt(lenEN * 350 * ratioEN) * (0.85 + Math.random() * 0.3);
+                baseWidthEN = Math.max(220, Math.min(baseWidthEN, 750));
+
+                const elEN = document.createElement('div');
+                elEN.className = 'letter-container';
+                elEN.id = `container-${letter}-en`;
+                elEN.dataset.letter = letter;
+                elEN.dataset.lang = 'en';
+                elEN.dataset.baseWidth = baseWidthEN;
+                elEN.style.width = `${baseWidthEN}px`;
+                elEN.style.setProperty('--local-main-color', sharedMainColor); 
+                elEN.style.setProperty('--local-anno-color', sharedAnnoColor);
+                elEN.style.setProperty('--local-punct-color', sharedPunctColor); 
+                elEN.innerHTML = `
+                    <div class="content-wrapper">
+                        <div class="story-block">
+                            <div class="article-body">${enTitleStr}${enHtml}</div>
+                        </div>
+                    </div>
+                `;
+                textsLayer.appendChild(elEN);
+                activeBlocks.push(elEN);
+
+                const elEN_letter = document.createElement('div');
+                elEN_letter.className = 'letter-container'; 
+                elEN_letter.id = `dummy-container-${letter}-en`;
+                elEN_letter.style.width = `${baseWidthEN}px`;
+                elEN_letter.innerHTML = `<div class="idle-huge-letter">${letter}</div>`;
+                lettersLayer.appendChild(elEN_letter);
+            });
+
+            setTimeout(() => { scatterBlocks(); }, 50);
+        }
+
+        function scatterBlocks() {
+            const placedRects = [];
+            const canvasCenter = 4000; 
+            const gap = Math.random() * 3 + 1; 
+
+            let processingQueue = [];
+
+            if (targetPairLetter) {
+                const targetEN = activeBlocks.find(b => b.dataset.letter === targetPairLetter && b.dataset.lang === 'en');
+                const targetZH = activeBlocks.find(b => b.dataset.letter === targetPairLetter && b.dataset.lang === 'zh');
+                if (targetEN) processingQueue.push(targetEN);
+                if (targetZH) processingQueue.push(targetZH);
+            }
+
+            const otherENBlocks = activeBlocks.filter(b => b.dataset.lang === 'en' && b.dataset.letter !== targetPairLetter).sort(() => Math.random() - 0.5);
+            processingQueue.push(...otherENBlocks);
+
+            const otherZHBlocks = activeBlocks.filter(b => b.dataset.lang === 'zh' && b.dataset.letter !== targetPairLetter).sort(() => Math.random() - 0.5);
+            processingQueue.push(...otherZHBlocks);
+
+            processingQueue.forEach((el) => {
+                const hitW = el.offsetWidth;
+                const hitH = el.offsetHeight;
+                
+                const currentMainColor = el.style.getPropertyValue('--local-main-color');
+                
+                let isTargetEN = (targetPairLetter && el.dataset.letter === targetPairLetter && el.dataset.lang === 'en');
+                let isTargetZH = (targetPairLetter && el.dataset.letter === targetPairLetter && el.dataset.lang === 'zh');
+                let isOtherZH = (el.dataset.lang === 'zh' && el.dataset.letter !== targetPairLetter);
+
+                let posX, posY;
+                let angle = Math.random() * Math.PI * 2; 
+
+                if (isTargetEN) {
+                    posX = canvasCenter - (hitW / 2);
+                    posY = canvasCenter - (hitH / 2);
+                } else if (isTargetZH) {
+                    const pairedEN = placedRects.find(r => r.letter === targetPairLetter && r.lang === 'en');
+                    if (pairedEN) {
+                        let gapX = 30 + Math.random() * 20; 
+                        let gapY = Math.random() * 60 - 30; 
+                        
+                        if (Math.random() > 0.5) {
+                            posX = pairedEN.x + pairedEN.w + gapX; 
+                        } else {
+                            posX = pairedEN.x - hitW - gapX; 
+                        }
+                        posY = pairedEN.y + gapY;
+                    } else {
+                        posX = canvasCenter - (hitW / 2);
+                        posY = canvasCenter - (hitH / 2);
+                    }
+                } else {
+                    let radius = 180; 
+                    let angleStep = 2.39996; 
+                    let radiusStep = 0.5;
+                    let isInvalidSpot = true;
+                    let loopGuard = 0;
+
+                    while (isInvalidSpot && loopGuard < 25000) {
+                        posX = canvasCenter + Math.cos(angle) * radius - (hitW / 2);
+                        posY = canvasCenter + Math.sin(angle) * radius - (hitH / 2);
+
+                        let inCenterZone = false;
+                        if (isOtherZH) {
+                            if (Math.abs((posX + hitW / 2) - canvasCenter) < 1200 && 
+                                Math.abs((posY + hitH / 2) - canvasCenter) < 800) {
+                                inCenterZone = true;
+                            }
+                        }
+
+                        let colliding = false;
+                        let aligned = false;
+                        let colorClash = false;
+
+                        if (!inCenterZone) {
+                            for (let rect of placedRects) {
+                                if (
+                                    posX < rect.x + rect.w + gap &&
+                                    posX + hitW + gap > rect.x &&
+                                    posY < rect.y + rect.h + gap &&
+                                    posY + hitH + gap > rect.y
+                                ) {
+                                    colliding = true;
+                                    break;
+                                }
+                            }
+
+                            if (!colliding) {
+                                for (let rect of placedRects) {
+                                    let rectCenterX = rect.x + rect.w / 2;
+                                    let rectCenterY = rect.y + rect.h / 2;
+                                    let elCenterX = posX + hitW / 2;
+                                    let elCenterY = posY + hitH / 2;
+                                    
+                                    let dist = Math.sqrt(Math.pow(rectCenterX - elCenterX, 2) + Math.pow(rectCenterY - elCenterY, 2));
+
+                                    if (dist < 300) { 
+                                        let staggerMin = 35; 
+                                        let leftAlign = Math.abs(posX - rect.x) < staggerMin;
+                                        let rightAlign = Math.abs((posX + hitW) - (rect.x + rect.w)) < staggerMin;
+                                        let topAlign = Math.abs(posY - rect.y) < staggerMin;
+                                        let bottomAlign = Math.abs((posY + hitH) - (rect.y + rect.h)) < staggerMin;
+
+                                        if (leftAlign || rightAlign || topAlign || bottomAlign) {
+                                            if (el.dataset.letter !== rect.letter) {
+                                                aligned = true;
+                                                break;
+                                            }
+                                        }
+
+                                        if (el.dataset.letter !== rect.letter && currentMainColor === rect.color) {
+                                            colorClash = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        isInvalidSpot = inCenterZone || colliding || aligned || colorClash;
+
+                        if (isInvalidSpot) {
+                            angle += angleStep;
+                            radius += radiusStep;
+                            loopGuard++;
+                        }
+                    }
+                }
+
+                el.style.left = `${posX}px`;
+                el.style.top = `${posY}px`;
+                el.style.visibility = 'visible';
+
+                if (el.dataset.lang === 'en') {
+                    const dummy = document.getElementById(`dummy-container-${el.dataset.letter}-en`);
+                    if (dummy) {
+                        dummy.style.left = `${posX}px`;
+                        dummy.style.top = `${posY}px`;
+                    }
+                }
+
+                placedRects.push({ x: posX, y: posY, w: hitW, h: hitH, letter: el.dataset.letter, lang: el.dataset.lang, angle: angle, color: currentMainColor });
+            });
+        }
+
+        function initCameraEvents() {
+            viewport.addEventListener('mousedown', (e) => {
+                if (e.target.closest('#controls') || e.target.closest('.alphabet-nav') || e.target.closest('.postcard-trigger')) return;
+                isDragging = true;
+                document.body.classList.add('is-dragging');
+                startPan = { x: e.clientX - cam.x, y: e.clientY - cam.y };
+                canvas.style.transition = 'none'; 
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                cam.x = e.clientX - startPan.x;
+                cam.y = e.clientY - startPan.y;
+                updateCanvas();
+            });
+
+            window.addEventListener('mouseup', () => {
+                isDragging = false;
+                document.body.classList.remove('is-dragging');
+            });
+
+            viewport.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const zoomSensitivity = 0.0015;
+                const delta = -e.deltaY * zoomSensitivity;
+                let newScale = cam.scale * Math.exp(delta);
+                newScale = Math.max(0.05, Math.min(newScale, 3.15)); 
+                
+                const mouseX = e.clientX;
+                const mouseY = e.clientY;
+                
+                cam.x = mouseX - (mouseX - cam.x) * (newScale / cam.scale);
+                cam.y = mouseY - (mouseY - cam.y) * (newScale / cam.scale);
+                cam.scale = newScale;
+                
+                updateZoomSliderUI();
+                canvas.style.transition = 'none';
+                updateCanvas();
+            }, {passive: false});
+        }
+
+        function updateCanvas() {
+            canvas.style.transform = `translate(${cam.x}px, ${cam.y}px) scale(${cam.scale})`;
+        }
+
+        window.flyTo = function(letter, event, instant = false) {
+            if(event) event.preventDefault();
+            
+            const targetEN = document.getElementById(`container-${letter}-en`);
+            if(!targetEN) return;
+
+            document.querySelectorAll('.alphabet-list a').forEach(a => a.classList.remove('active'));
+            const activeLink = Array.from(document.querySelectorAll('.alphabet-list a')).find(a => a.dataset.letter === letter);
+            if(activeLink) activeLink.classList.add('active');
+
+            const enLeft = parseFloat(targetEN.style.left);
+            const enTop = parseFloat(targetEN.style.top);
+            const enWidth = targetEN.offsetWidth;
+            const enHeight = targetEN.offsetHeight;
+
+            const targetScale = cam.scale;
+
+            const centerX = (window.innerWidth + 480) / 2 - (enLeft + enWidth / 2) * targetScale;
+            const centerY = window.innerHeight / 2 - (enTop + enHeight / 2) * targetScale;
+
+            cam.x = centerX;
+            cam.y = centerY;
+
+            updateZoomSliderUI();
+
+            if(!instant) {
+                canvas.style.transition = 'transform 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+            } else {
+                canvas.style.transition = 'none';
+            }
+            updateCanvas();
+            
+            if(!instant) {
+                setTimeout(() => { canvas.style.transition = 'none'; }, 800);
+            }
+        };
+
+        const sizeSlider = document.getElementById('sizeSlider');
+        const sizeValue = document.getElementById('sizeValue');
+        const zoomSlider = document.getElementById('zoomSlider');
+        const zoomValue = document.getElementById('zoomValue');
+
+        function updateZoomSliderUI() {
+            if(zoomSlider) {
+                zoomSlider.value = cam.scale;
+                zoomValue.textContent = cam.scale.toFixed(2) + 'x';
+            }
+        }
+
+        function initSliders() {
+            let resizeTimeout;
+            
+            if (sizeSlider) {
+                sizeSlider.addEventListener('input', (e) => {
+                    const newSize = parseFloat(e.target.value);
+                    sizeValue.textContent = newSize.toFixed(1) + 'px';
+                    document.documentElement.style.setProperty('--trigger-size', newSize + 'px');
+                    
+                    const ratio = newSize / 14.0;
+                    const widthMultiplier = ratio > 1 ? Math.pow(ratio, 0.55) : 1; 
+
+                    activeBlocks.forEach(el => {
+                        const bw = parseFloat(el.dataset.baseWidth);
+                        const newW = `${bw * widthMultiplier}px`;
+                        el.style.width = newW;
+                        
+                        if (el.dataset.lang === 'en') {
+                            const dummy = document.getElementById(`dummy-container-${el.dataset.letter}-en`);
+                            if (dummy) dummy.style.width = newW;
+                        }
+                    });
+                    
+                    clearTimeout(resizeTimeout);
+                    resizeTimeout = setTimeout(() => { scatterBlocks(); }, 150);
+                });
+            }
+
+            if (zoomSlider) {
+                zoomSlider.addEventListener('input', (e) => {
+                    const newScale = parseFloat(e.target.value);
+                    zoomValue.textContent = newScale.toFixed(2) + 'x';
+                    
+                    const prevScale = cam.scale;
+                    cam.scale = newScale;
+                    
+                    const mouseX = window.innerWidth / 2;
+                    const mouseY = window.innerHeight / 2;
+                    
+                    cam.x = mouseX - (mouseX - cam.x) * (newScale / prevScale);
+                    cam.y = mouseY - (mouseY - cam.y) * (newScale / prevScale);
+                    
+                    canvas.style.transition = 'none';
+                    updateCanvas();
+                });
+            }
+        }
+
+        function initHoverTriggers() {
+            const tooltip = document.getElementById('postcard-tooltip');
+            const bgPreview = document.getElementById('bg-preview');
+            const bgPreviewImg = document.getElementById('bg-preview-img');
+            const triggers = document.querySelectorAll('.postcard-trigger');
+            
+            triggers.forEach(trigger => {
+                trigger.addEventListener('mouseenter', (e) => {
+                    const originalText = trigger.getAttribute('data-original');
+                    const colorizeSentences = (txt) => {
+                        const regex = /([^.!?。！？]+[.!?。！？]*)/g;
+                        const parts = txt.match(regex);
+                        if (!parts) return txt; 
+                        let lastCol = null; 
+                        return parts.map(part => {
+                            let randCol;
+                            do { randCol = palette[Math.floor(Math.random() * palette.length)]; } while (randCol === lastCol);
+                            lastCol = randCol; 
+                            return `<span style="color: ${randCol};">${part}</span>`;
+                        }).join('');
+                    };
+                    
+                    if (originalText.includes('||')) {
+                        const texts = originalText.split('||');
+                        tooltip.innerHTML = `<div class="tt-box">${colorizeSentences(texts[0])}</div><div class="tt-box">${colorizeSentences(texts[1])}</div>`;
+                        tooltip.style.background = 'transparent'; tooltip.style.boxShadow = 'none'; tooltip.style.border = 'none'; tooltip.style.padding = '0';
+                    } else {
+                        tooltip.innerHTML = colorizeSentences(originalText); 
+                        tooltip.style.background = 'rgba(255, 255, 255, 0.98)'; tooltip.style.boxShadow = '0 10px 30px rgba(0,0,0,0.12)'; tooltip.style.border = '1px solid rgba(0,0,0,0.08)'; tooltip.style.padding = '12px 16px';
+                    }
+                    tooltip.style.visibility = 'visible'; tooltip.style.opacity = '1';
+
+                    const bgUrl = trigger.getAttribute('data-bg');
+                    if(bgUrl) {
+                        bgPreviewImg.src = bgUrl;
+                        const parentContainer = e.target.closest('.letter-container');
+                        const localMain = getComputedStyle(parentContainer).getPropertyValue('--local-main-color');
+                        bgPreview.style.setProperty('--local-main-color', localMain);
+                        bgPreview.classList.add('active');
+                    }
+                });
+                
+                trigger.addEventListener('mousemove', (e) => {
+                    let leftPos = e.clientX + 15, topPos = e.clientY + 15;
+                    if (leftPos + tooltip.offsetWidth > window.innerWidth) leftPos = e.clientX - tooltip.offsetWidth - 15;
+                    if (topPos + tooltip.offsetHeight > window.innerHeight) topPos = e.clientY - tooltip.offsetHeight - 15;
+                    tooltip.style.left = leftPos + 'px'; tooltip.style.top = topPos + 'px';
+                });
+                
+                trigger.addEventListener('mouseleave', () => {
+                    tooltip.style.visibility = 'hidden'; tooltip.style.opacity = '0';
+                    bgPreview.classList.remove('active');
+                });
+            });
+        }
+
+        function initStickers() {
+            const overlay = document.getElementById('sticker-overlay');
+            const numStickers = Math.floor(Math.random() * 11) + 30; 
+            const isStickers = Math.random() < 0.7;
+            const folderName = isStickers ? 'stickers' : 'airmailmarks';
+            const filePrefix = isStickers ? 'sticker' : 'air';
+            const MAX_AVAILABLE_IMAGES = isStickers ? 190 : 46; 
+            
+            let availableIds = [];
+            for (let i = 1; i <= MAX_AVAILABLE_IMAGES; i++) { availableIds.push(i); }
+            availableIds.sort(() => Math.random() - 0.5);
+            const selectedIds = availableIds.slice(0, numStickers);
+            
+            for (let i = 0; i < numStickers; i++) {
+                const img = document.createElement('img');
+                img.src = `../assets/${folderName}/${filePrefix}${selectedIds[i]}.png`;
+                img.className = 'interactive-sticker';
+                
+                const scale = Math.random() * 0.3 + 0.3; 
+                const rotation = Math.random() * 360;
+                let posX = Math.random() < 0.5 ? (Math.random() * 30 - 10) : (80 + Math.random() * 30);
+                let posY = Math.random() * 120 - 10;
+
+                img.style.left = `${posX}vw`; img.style.top = `${posY}vh`;
+                img.style.transform = `translate(-50%, -50%) rotate(${rotation}deg) scale(${scale})`;
+                img.addEventListener('mouseenter', function() { this.remove(); });
+                overlay.appendChild(img);
+            }
+        }
+    </script>
+</body>
+</html>

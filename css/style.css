@@ -1,0 +1,284 @@
+/* 1. 引入你的字体 */
+@font-face {
+    font-family: 'CachetForWeb';
+    src: url('../assets/fonts/Cachetforweb-Regular.woff2') format('woff2'); 
+}
+
+/* =========================================
+   全局 3D 悬浮导航栏样式 
+========================================= */
+#draggable-nav {
+    position: fixed; 
+    top: 40px;
+    right: 40px;
+    width: 234px;  
+    perspective: 1000px; 
+    z-index: 999999; 
+    transition: height 0.3s ease; 
+}
+
+#nav-anchor {
+    width: 100%;
+    height: 100%;
+    transform-style: preserve-3d;
+    will-change: transform; 
+}
+
+.nav-card {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    transition: transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1); 
+    transform-style: preserve-3d;
+    cursor: grab; 
+}
+
+.nav-card:active {
+    cursor: grabbing;
+}
+
+.nav-card.is-flipped {
+    transform: rotateY(180deg);
+}
+
+.nav-face {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    backface-visibility: hidden;
+    border-radius: 0; 
+    box-shadow: 0 4px 20px rgba(0,0,0,0.12); 
+    background-color: #fff; 
+}
+
+.nav-front {
+    transform: rotateY(0deg);
+    z-index: 2;
+}
+
+.nav-back {
+    transform: rotateY(180deg);
+    z-index: 1;
+}
+
+.nav-back img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 0; 
+    pointer-events: none; 
+    display: block;
+}
+
+/* =========================================
+   纯 CSS 绘制：自适应明信片线条排版
+========================================= */
+.postcard-design {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; 
+    z-index: 1; 
+}
+
+.pc-divider {
+    position: absolute;
+    top: 5%; bottom: 5%;
+    left: 50%;
+    width: 1px;
+    background-color: #000;
+}
+
+.pc-stamp {
+    position: absolute;
+    top: 8%; right: 6%;
+    width: 16%; 
+    height: 25%;
+    border: 1px solid #000;
+    box-sizing: border-box;
+}
+
+.pc-lines {
+    position: absolute;
+    bottom: 8%; right: 6%;
+    width: 40%; 
+    height: 22%; 
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between; 
+}
+
+.pc-lines span {
+    display: block;
+    width: 100%;
+    height: 1px;
+    background-color: #000;
+}
+
+/* =========================================
+   💡 导航图文排版：绝对分离的层级结构
+========================================= */
+
+/* 1. 中文垫底层：只是一张位于 z-index:1 的背景图 */
+#draggable-nav .nav-cn-img {
+    position: absolute; 
+    height: 35px;       
+    z-index: 1;         
+    pointer-events: none; 
+    opacity: 0.85; 
+}
+
+/* 2. 英文交互层：漂浮在 z-index:10 */
+#draggable-nav .nav-word {
+    position: absolute; 
+    z-index: 10;
+    font-family: 'CachetForWeb', sans-serif;
+    font-size: 1.4rem; 
+    color: #000000;        
+    text-decoration: none;
+    text-transform: lowercase;
+    letter-spacing: 1px;
+    transition: color 0.3s ease;
+    padding: 10px; /* 👈 这里就是那个“透明保护壳” */
+}
+
+/* =========================================
+   💡 3. 共享定位与旋转系：沿边缘排版 
+   (使用负数来抵消 padding 的影响！)
+========================================= */
+
+/* 上边缘：倒置 180 度 */
+#draggable-nav .nav-top { 
+    top: -5px; /* 👈 【在这里调整】想更靠近边缘就改得更小，例如 -8px */
+    left: 50%; 
+    transform: translateX(-50%) rotate(180deg); 
+}
+
+/* 下边缘：正向放置 */
+#draggable-nav .nav-bottom { 
+    bottom: -5px; /* 👈 【在这里调整】 */
+    left: 50%; 
+    transform: translateX(-50%); 
+}
+
+/* 左边缘：逆时针旋转 90 度 */
+#draggable-nav .nav-left { 
+    left: -25px; /* 👈 【在这里调整】 */
+    top: 50%; 
+    transform: translateY(-50%) rotate(-90deg); 
+}
+
+/* 右边缘：顺时针旋转 90 度 */
+#draggable-nav .nav-right { 
+    right: -25px; /* 👈 【在这里调整】 */
+    top: 50%; 
+    transform: translateY(-50%) rotate(90deg); 
+}
+
+
+/* =========================================
+   全局 顶部基础导航 (Luke & Nik 风格)
+========================================= */
+#global-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 120px; 
+    pointer-events: none;
+    z-index: 999990;
+    mix-blend-mode: difference; 
+}
+
+.header-logo {
+    position: absolute;
+    top: 20px; 
+    left: 50%;
+    transform: translateX(-50%);
+    pointer-events: auto;
+}
+
+.header-logo img {
+    height: 60px; 
+    display: block;
+    transition: opacity 0.3s ease;
+    filter: brightness(0) invert(1); 
+}
+
+.header-logo:hover img {
+    opacity: 0.7;
+}
+
+.header-message {
+    position: absolute;
+    top: 35px; 
+    left: 40px; 
+    font-family: 'CachetForWeb', sans-serif;
+    font-size: 1.4rem;
+    color: #ffffff !important; 
+    text-decoration: none;
+    text-transform: lowercase;
+    letter-spacing: 1px;
+    pointer-events: auto;
+    transition: opacity 0.3s ease;
+}
+
+.header-message:hover {
+    opacity: 0.7;
+}
+
+/* =========================================
+   全局双视频“屏保”样式 (Screensaver)
+========================================= */
+#screensaver-layer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 9999999; /* 确保在所有元素之上 */
+    pointer-events: none; /* 让鼠标事件穿透，以便触发底层页面的唤醒机制 */
+    display: none; /* 默认隐藏 */
+}
+
+.ss-video {
+    position: absolute;
+    width: 75vw; /* 占据屏幕 75% 的宽度，露出底层网页 */
+    box-shadow: 0 25px 50px rgba(0,0,0,0.6); /* 强烈的阴影强调它是剥离的图层 */
+    /* 如果你的视频不是 16:9，可能需要加上 height: auto; */
+    object-fit: cover;
+}
+/* =========================================
+   全局導航與 Message 的中文懸浮樣式
+========================================= */
+.hover-wrapper { 
+    /* position: relative; 👈已注释掉：避免覆盖 header-message 的 absolute 导致位置偏移 */ 
+    cursor: pointer; 
+    display: inline-block; /* 確保 a 標籤能正確作為定位參考 */
+}
+
+.hover-wrapper .zh-name {
+    display: none;
+    position: absolute;
+    top: 100%;                    /* 掛在正下方 */
+    left: 50%;
+    transform: translateX(-50%);  /* 絕對居中 */
+    margin-top: 6px;              /* 💡 調整中英文上下距離的地方 */
+    
+    color: #ffffff !important;    /* 👈已修改：配合 mix-blend-mode 必须设为白色才能正常显示 */
+    font-size: 14px !important;
+    font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", sans-serif !important;
+    font-weight: normal !important;
+    white-space: nowrap;
+    text-transform: none !important;
+    pointer-events: none;
+    letter-spacing: 1px;
+    text-shadow: none !important;
+    -webkit-text-stroke: 0px transparent !important;
+    z-index: 10000;
+}
+
+.hover-wrapper:hover .zh-name {
+    display: block;
+}
