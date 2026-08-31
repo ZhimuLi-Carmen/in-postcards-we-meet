@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>留言板</title>
+    
+    <link rel="stylesheet" href="../css/style.css">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+    
+    <style>
+        :root {
+            --base-font-size: 8vw;
+            --scale-factor: 1;
+        }
+
+        @font-face {
+            font-family: 'Cachet';
+            src: url('../assets/fonts/Cachetforweb-Regular.woff2') format('woff2'); 
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            min-width: 100vw;
+            min-height: 100vh;
+            background-color: #fafafa;
+            overflow: auto; 
+            font-family: 'Cachet', sans-serif;
+            cursor: text; 
+        }
+
+        #global-header {
+            mix-blend-mode: normal !important;
+        }
+        .header-logo img {
+            filter: brightness(0) !important; 
+        }
+
+        #canvas-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 💡 添加 align-items: flex-start; 让宽度贴合文字，实现精确居中 */
+        .swiss-sidebar { position: fixed; left: 40px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 6px; z-index: 1000; cursor: default; align-items: flex-start; }
+        
+        #btn-catch { position: fixed; left: 40px; bottom: 40px; z-index: 1000; }
+        #btn-gallery { position: fixed; right: 40px; bottom: 40px; z-index: 1000; }
+
+        .nav-item { 
+            background: transparent; 
+            color: rgba(0, 0, 0, 0.3); 
+            border: none; 
+            padding: 8px 0; 
+            cursor: pointer; 
+            font-family: 'Cachet', sans-serif; 
+            font-size: 30px; 
+            text-align: left; 
+            text-transform: lowercase; 
+            transition: color 0.2s ease, padding-left 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94); 
+            position: relative; 
+            outline: none; 
+        }
+        .nav-item:hover { color: rgba(0, 0, 0, 0.6); }
+        .nav-item.active { color: #000; padding-left: 15px; }
+        .nav-item.active::before { content: ""; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 8px; height: 1px; background-color: #000; }
+        
+        /* =========================================
+           💡 新增：全局交互元素的纯黑极简中文悬浮样式
+        ========================================= */
+        /* 通用交互包裹层 */
+        .hover-wrapper { position: relative; cursor: pointer; }
+        
+        .nav-item .zh-name,
+        .hover-wrapper .zh-name {
+            display: none;
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #000 !important;
+            font-size: 14px !important;
+            font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", sans-serif !important;
+            font-weight: normal !important;
+            white-space: nowrap;
+            text-transform: none !important;
+            pointer-events: none;
+            letter-spacing: 1px;
+            text-shadow: none !important;
+            -webkit-text-stroke: 0px transparent !important;
+            z-index: 10000;
+        }
+
+        /* nav-item 的特调：穿透 padding 挂在下方 */
+        .nav-item .zh-name { top: 45px; margin-top: 0; }
+        /* 配合缩进居中 */
+        .nav-item.active .zh-name { transform: translateX(calc(-50% + 7.5px)); }
+        
+        /* 常规悬浮件的特调：挂在正下方 */
+        .hover-wrapper .zh-name { top: 100%; margin-top: 1px; }
+
+        .nav-item:hover .zh-name,
+        .hover-wrapper:hover .zh-name { display: block; }
+
+        /* 💡 特调：底部的按钮悬浮必须向上浮出，防止被屏幕切断 */
+#btn-catch .zh-name,
+#btn-gallery .zh-name,
+.bottom-up-hint .zh-name {
+    top: auto !important;
+    
+    /* 💡 修改點 1：刪除 bottom: 100%; 和 margin-bottom: 8px; */
+    /* 💡 修改點 2：直接用 bottom 指定具體像素！ */
+    bottom: 45px; /* <--- 💡 在這裡修改：數字越小，中文就會越往下掉（越靠近英文）。例如改為 30px 或 32px 試試看 */
+    
+    margin-top: 0;
+    margin-bottom: 0; 
+}
+
+        #controls { position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%); z-index: 1000; display: flex; align-items: center; background: transparent; border: none; padding: 0; cursor: default; }
+        .control-group { display: flex; align-items: center; gap: 15px; }
+        #controls label { font-family: 'Cachet', sans-serif; font-size: 20px; color: #000; white-space: nowrap; text-transform: lowercase; user-select: none; }
+        .slider-value { opacity: 0.5; margin-left: 5px; }
+        
+        .swiss-slider { -webkit-appearance: none; appearance: none; width: 150px; background: transparent; cursor: pointer; outline: none; }
+        .swiss-slider::-webkit-slider-runnable-track { width: 100%; height: 1px; background: #000; border: none; }
+        .swiss-slider::-moz-range-track { width: 100%; height: 1px; background: #000; border: none; }
+        .swiss-slider::-webkit-slider-thumb { -webkit-appearance: none; height: 12px; width: 2px; background: #000; margin-top: -5px; border-radius: 0; transition: transform 0.1s ease; }
+        .swiss-slider::-moz-range-thumb { height: 12px; width: 2px; background: #000; border: none; border-radius: 0; transition: transform 0.1s ease; }
+        .swiss-slider:hover::-webkit-slider-thumb { transform: scaleX(4); }
+        .swiss-slider:hover::-moz-range-thumb { transform: scaleX(4); }
+
+        #hidden-input { position: fixed; top: -100px; left: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+        .text-block {
+            position: absolute; 
+            font-size: var(--base-font-size); 
+            font-weight: bold;
+            line-height: 1.2;
+            white-space: pre; 
+            transform: translateY(-50%) scale(var(--scale-factor)); 
+            transform-origin: center center;
+            will-change: transform; 
+            transition: transform 0.1s ease-out;
+            font-feature-settings: "liga" 1, "calt" 1; 
+            padding: 10px; 
+        }
+
+        .letter { display: inline-block; transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), color 0.4s ease; }
+        .cursor { display: inline-block; width: 0.08em; height: 0.9em; background-color: #1a1a1a; vertical-align: baseline; margin-left: 2px; animation: blink 1s step-end infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+        .set-1 { font-feature-settings: "ss01" 1, "liga" 1, "calt" 1; }
+        .set-2 { font-feature-settings: "ss02" 1, "liga" 1, "calt" 1; }
+        .set-3 { font-feature-settings: "ss03" 1, "liga" 1, "calt" 1; }
+        .set-4 { font-feature-settings: "ss04" 1, "liga" 1, "calt" 1; }
+
+        #hint { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #d0d0d0; font-size: 1.5vw; pointer-events: none; font-family: 'Cachet', sans-serif; letter-spacing: 1px; z-index: 500; text-align: center; }
+
+        #gallery-overlay {
+            position: fixed;
+            top: 100%; 
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #fafafa;
+            z-index: 2000;
+            overflow-y: auto;
+            transition: top 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+            padding: 80px 40px;
+            box-sizing: border-box;
+            cursor: default;
+        }
+
+        #gallery-overlay.open { top: 0; }
+
+        #close-gallery {
+            position: fixed;
+            top: 40px;
+            right: 40px;
+            background: transparent;
+            border: none;
+            font-family: 'Cachet', sans-serif;
+            font-size: 24px;
+            color: #000;
+            cursor: pointer;
+            z-index: 2010;
+            display: none; 
+        }
+
+        #gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 40px;
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .gallery-item {
+            width: 100%;
+            background: #fff;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative; 
+        }
+        .gallery-item:hover { transform: translateY(-5px); box-shadow: 0 15px 40px rgba(0,0,0,0.1); }
+        .gallery-item img { width: 100%; height: auto; display: block; }
+        
+        .delete-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            font-size: 18px;
+            color: #000;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.2s, background 0.2s, color 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        .gallery-item:hover .delete-btn { opacity: 1; }
+        .delete-btn:hover { background: #ff4a4a; color: #fff; }
+
+        #lightbox { display: none; position: fixed; inset: 0; background: rgba(250,250,250,0.95); z-index: 3000; align-items: center; justify-content: center; cursor: zoom-out; }
+        #lightbox img { max-width: 90%; max-height: 90vh; box-shadow: 0 20px 50px rgba(0,0,0,0.15); }
+
+        @media (max-width: 768px) {
+            .swiss-sidebar { top: 20px; left: 20px; transform: none; flex-direction: row; gap: 15px; }
+            #btn-catch { left: 20px; bottom: 20px; }
+            #btn-gallery { right: 20px; bottom: 20px; }
+            .nav-item { font-size: 22px; padding: 0; }
+            .nav-item.active { padding-left: 0; border-bottom: 2px solid #000; }
+            .nav-item.active::before { display: none; }
+            #controls { bottom: 60px; width: 100%; justify-content: center; }
+            #hint { font-size: 4vw; }
+            #gallery-overlay { padding: 60px 20px; }
+            #gallery-grid { grid-template-columns: repeat(auto-fill, minmax(100%, 1fr)); gap: 20px; }
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="swiss-sidebar" id="mode-switch">
+        <button id="btn-color" class="nav-item active">color<span class="zh-name">彩色</span></button>
+        <button id="btn-black" class="nav-item">black<span class="zh-name">黑白</span></button>
+    </nav>
+
+    <button id="btn-catch" class="nav-item">catch<span class="zh-name">截图</span></button>
+    <button id="btn-gallery" class="nav-item">gallery<span class="zh-name">图库</span></button>
+
+    <div id="controls">
+        <div class="control-group">
+            <label for="size-slider" class="hover-wrapper bottom-up-hint">
+                size &mdash; <span id="sizeValue" class="slider-value">8.0vw</span>
+                <span class="zh-name">大小</span>
+            </label>
+            <input type="range" class="swiss-slider" id="size-slider" min="2" max="25" step="0.01" value="8">
+        </div>
+    </div>
+
+    <div id="canvas-layer"></div>
+
+    <textarea id="hidden-input"></textarea>
+    
+    <div id="hint">
+        Click anywhere to type...
+        <br>
+        <span style="font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', sans-serif; font-size: 18px; letter-spacing: 2px; margin-top: 15px; display: inline-block;">
+            点击任意位置，用世界各地的陌生人的手写下留言
+        </span>
+    </div>
+
+    <div id="gallery-overlay">
+        <button id="close-gallery" class="hover-wrapper">&#10005; close<span class="zh-name">关闭</span></button>
+        <div id="gallery-grid"></div>
+    </div>
+    
+    <div id="lightbox">
+        <img src="" alt="Zoomed snapshot">
+    </div>
+
+    <div id="email-overlay" style="display: none; position: fixed; inset: 0; background: rgba(250,250,250,0.85); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); z-index: 4000; align-items: center; justify-content: center; flex-direction: column;">
+        <div id="postcard-stack" style="width: 80%; max-width: 500px; margin-bottom: 40px;"></div>
+
+        <p class="hover-wrapper" style="font-family: 'Cachet', sans-serif; font-size: 24px; color: #000; margin-bottom: 20px; text-align: center;">
+            enter email to mail your postcard
+            <span class="zh-name">输入邮箱发送</span>
+        </p>
+        
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <div class="hover-wrapper" style="display: inline-block;">
+                <input type="email" id="user-email-input" placeholder="your@email.com" style="font-family: 'Cachet', sans-serif; font-size: 20px; padding: 10px; border: 1px solid #000; background: transparent; outline: none; width: 300px; text-transform: lowercase;">
+                <span class="zh-name">你的邮箱号</span>
+            </div>
+            
+            <button id="send-email-btn" class="hover-wrapper" style="font-family: 'Cachet', sans-serif; font-size: 20px; padding: 10px 20px; background: #000; color: #fff; border: none; cursor: pointer; transition: opacity 0.2s;">
+                send
+                <span class="zh-name">发送</span>
+            </button>
+        </div>
+        
+        <button id="cancel-email-btn" class="hover-wrapper" style="margin-top: 20px; background: transparent; border: none; font-family: 'Cachet', sans-serif; font-size: 16px; color: rgba(0,0,0,0.4); cursor: pointer; text-transform: lowercase;">
+            cancel
+            <span class="zh-name">取消</span>
+        </button>
+    </div>
+
+    <script src="../js/postcardsdata.js"></script>
+    <script src="../js/nav.js"></script>
+    <script src="../js/screensaver.js"></script>  <script></script>
+
+    <script>
+        const IMG_BB_API_KEY = '1a6dceadc9285a57a398efe3456f113b';
+        const EMAILJS_PUBLIC_KEY = 'RyUHxR8Q1afvMGn5T';
+        const EMAILJS_SERVICE_ID = 'service_8jqzceo';
+        const EMAILJS_TEMPLATE_ID = 'template_6pv5ygj';
+        emailjs.init(EMAILJS_PUBLIC_KEY);
+
+        // =========================================
+        // 💡 新增：包含 10 张盲盒背面图的数组
+        // =========================================
+        const backImages = [
+            'https://i.ibb.co/dJpHvqvz/1-2.jpg',
+            'https://i.ibb.co/JjCN9f5V/1-3.jpg',
+            'https://i.ibb.co/8gFFx8nG/1-4.jpg',
+            'https://i.ibb.co/VY6kynWF/1-5.jpg',
+            'https://i.ibb.co/chmgrmkz/1-6.jpg',
+            'https://i.ibb.co/p69xLr6m/1-7.jpg',
+            'https://i.ibb.co/nsFZ78tY/1-8.jpg',
+            'https://i.ibb.co/kVx5HkcM/1-9.jpg',
+            'https://i.ibb.co/F40PpDQR/1.jpg',
+            'https://i.ibb.co/jZDfznsd/1.jpg'
+        ];
+
+        let isInteractive = true; 
+
+        window.addEventListener('load', () => {
+            const headerMsg = document.querySelector('.header-message');
+            if (headerMsg) {
+                const randomColor = colors[Math.floor(Math.random() * colors.length)];
+                headerMsg.style.setProperty('color', randomColor, 'important');
+            }
+        });
+
+        let db;
+        const request = indexedDB.open("SketchArchiveDB", 1);
+        request.onupgradeneeded = (event) => {
+            db = event.target.result;
+            db.createObjectStore("snapshots", { keyPath: "id", autoIncrement: true });
+        };
+        request.onsuccess = (event) => { db = event.target.result; };
+        
+        let globalColorMode = 'color'; 
+
+        const sizeSlider = document.getElementById('size-slider');
+        const sizeValue = document.getElementById('sizeValue');
+        const controlsPanel = document.getElementById('controls');
+        const modeSwitch = document.getElementById('mode-switch');
+        const btnColor = document.getElementById('btn-color');
+        const btnBlack = document.getElementById('btn-black');
+        const btnCatch = document.getElementById('btn-catch'); 
+        const btnGallery = document.getElementById('btn-gallery');
+        const canvasLayer = document.getElementById('canvas-layer'); 
+        const inputField = document.getElementById('hidden-input');
+        const hint = document.getElementById('hint');
+        
+        const galleryOverlay = document.getElementById('gallery-overlay');
+        const closeGallery = document.getElementById('close-gallery');
+        const galleryGrid = document.getElementById('gallery-grid');
+        const lightbox = document.getElementById('lightbox');
+
+        const emailOverlay = document.getElementById('email-overlay');
+        const postcardStack = document.getElementById('postcard-stack');
+        const userEmailInput = document.getElementById('user-email-input');
+        const sendEmailBtn = document.getElementById('send-email-btn');
+        const cancelEmailBtn = document.getElementById('cancel-email-btn');
+        let currentImageBase64 = null; 
+
+        sizeSlider.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            const scaleFactor = val / 8; 
+            document.documentElement.style.setProperty('--scale-factor', scaleFactor);
+            sizeValue.textContent = val.toFixed(1) + 'vw';
+        });
+
+        [controlsPanel, modeSwitch, btnCatch, btnGallery].forEach(el => {
+            el.addEventListener('click', (e) => e.stopPropagation());
+            el.addEventListener('mousedown', (e) => e.stopPropagation());
+        });
+
+        btnColor.addEventListener('click', () => {
+            if (globalColorMode === 'color') return; 
+            globalColorMode = 'color';               
+            btnColor.classList.add('active');        
+            btnBlack.classList.remove('active');     
+            reRenderAllBlocks();                     
+        });
+
+        btnBlack.addEventListener('click', () => {
+            if (globalColorMode === 'black') return;
+            globalColorMode = 'black';
+            btnBlack.classList.add('active');
+            btnColor.classList.remove('active');
+            reRenderAllBlocks();
+        });
+
+        function reRenderAllBlocks() {
+            for (let [blockId, data] of blockDatabase) {
+                renderBlock(blockId, blockId === activeBlockId);
+            }
+        }
+
+        const colors = ['#e16e3c', '#f5cd46', '#f096d2', '#aa9bc8', '#5a50a0', '#1e283c', '#50a0dc', '#a0c364', '#785a37', '#2d6e3c'];
+        const protectedVault = ["---", ";;", "-1-", "-2-", "-3-", "-4-", "-5-", "-6-", "-7-", "_1_", "_2_", "_3_", "_4_", "_5_", "(-1-)", "(-2-)", "-11>", "-12>", "-13>", "-14>", "-21>", "-22>", "-23>", "-31>", "-32>", "-33>", "tat", "rar", "cac", "mam", "nan", "google", "environment", "government", "the", "and", "hello", "you"];
+        let blockDatabase = new Map(); 
+        let activeBlockId = null;      
+
+        function generateRandomStyle() {
+            const now = new Date();
+            const timeFactor = 0.5 + (now.getHours() + now.getMinutes() / 60) / 24;
+            const maxShift = 40 * timeFactor; 
+            const translateY = (Math.random() * maxShift * 2) - maxShift;
+            const maxMargin = 20 * timeFactor;
+            const marginLeft = Math.random() * maxMargin;
+            const marginRight = Math.random() * maxMargin;
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            const set = Math.floor(Math.random() * 5); 
+            return { set, color, translateY, marginLeft, marginRight };
+        }
+
+        document.body.addEventListener('click', (e) => {
+            if (!isInteractive) return; 
+
+            if (e.target === inputField) return;
+            if (hint) hint.style.display = 'none';
+
+            if (activeBlockId) {
+                const oldBlock = document.getElementById(activeBlockId);
+                if (oldBlock) {
+                    oldBlock.classList.remove('active');
+                    renderBlock(activeBlockId, false);
+                }
+            }
+
+            const clickedExistingBlock = e.target.closest('.text-block');
+
+            if (clickedExistingBlock) {
+                activeBlockId = clickedExistingBlock.id;
+                const data = blockDatabase.get(activeBlockId);
+                inputField.value = data.text; 
+            } else {
+                const newId = 'block-' + Date.now();
+                const newBlock = document.createElement('div');
+                newBlock.id = newId;
+                newBlock.className = 'text-block active';
+                
+                newBlock.style.left = (e.clientX / window.innerWidth * 100) + 'vw';
+                newBlock.style.top = (e.clientY / window.innerHeight * 100) + 'vh';
+
+                canvasLayer.appendChild(newBlock);
+
+                blockDatabase.set(newId, { text: "", previousText: "", charStates: [] });
+                activeBlockId = newId;
+                inputField.value = ""; 
+            }
+
+            setTimeout(() => { inputField.focus(); }, 10);
+            renderBlock(activeBlockId, true);
+        });
+
+        inputField.addEventListener('input', (e) => {
+            if (!isInteractive || !activeBlockId) return;
+
+            const currentText = e.target.value;
+            let data = blockDatabase.get(activeBlockId);
+            
+            let prefixLen = 0;
+            while (prefixLen < data.previousText.length && prefixLen < currentText.length && data.previousText[prefixLen] === currentText[prefixLen]) prefixLen++;
+
+            let suffixLen = 0;
+            while (suffixLen < (data.previousText.length - prefixLen) && suffixLen < (currentText.length - prefixLen) && data.previousText[data.previousText.length - 1 - suffixLen] === currentText[currentText.length - 1 - suffixLen]) suffixLen++;
+
+            const deletedCount = data.previousText.length - prefixLen - suffixLen;
+            const insertedCount = currentText.length - prefixLen - suffixLen;
+
+            const newStates = [];
+            for (let i = 0; i < insertedCount; i++) newStates.push(generateRandomStyle());
+
+            data.charStates.splice(prefixLen, deletedCount, ...newStates);
+            data.text = currentText;
+            data.previousText = currentText;
+
+            renderBlock(activeBlockId, true);
+        });
+
+        function renderBlock(blockId, showCursor) {
+            const data = blockDatabase.get(blockId);
+            const blockElement = document.getElementById(blockId);
+            if (!blockElement) return;
+
+            let generativeHTML = '';
+            let i = 0;
+            const text = data.text;
+
+            while (i < text.length) {
+                let matchedProtected = false;
+                for (let word of protectedVault) {
+                    if (text.startsWith(word, i)) {
+                        const state = data.charStates[i] || generateRandomStyle(); 
+                        const displayColor = globalColorMode === 'color' ? state.color : '#1a1a1a';
+                        generativeHTML += `<span class="letter" style="color: ${displayColor}; transform: translateY(${state.translateY}px); margin-left: ${state.marginLeft}px; margin-right: ${state.marginRight}px;">${word}</span>`;
+                        i += word.length; 
+                        matchedProtected = true;
+                        break;
+                    }
+                }
+
+                if (!matchedProtected) {
+                    const char = text[i];
+                    const state = data.charStates[i];
+                    if (char === ' ') {
+                        generativeHTML += `<span>&nbsp;&nbsp;</span>`;
+                    } else if (char === '\n') {
+                        generativeHTML += `<br>`;
+                    } else {
+                        const setClass = state.set === 0 ? '' : `set-${state.set}`;
+                        const displayColor = globalColorMode === 'color' ? state.color : '#1a1a1a';
+                        generativeHTML += `<span class="letter ${setClass}" style="color: ${displayColor}; transform: translateY(${state.translateY}px); margin-left: ${state.marginLeft}px; margin-right: ${state.marginRight}px;">${char}</span>`;
+                    }
+                    i++;
+                }
+            }
+
+            if (showCursor) generativeHTML += '<span class="cursor"></span>';
+            blockElement.innerHTML = generativeHTML;
+        }
+
+        function resetCanvas() {
+            blockDatabase.clear();
+            canvasLayer.innerHTML = '';
+            if (hint) hint.style.display = 'block';
+        }
+
+        function downloadToLocalHardDrive(base64Data) {
+            const link = document.createElement('a');
+            link.download = `postcard-${Date.now()}.jpg`; 
+            link.href = 'data:image/jpeg;base64,' + base64Data;
+            link.click();
+        }
+
+        btnCatch.addEventListener('click', () => {
+            if (blockDatabase.size === 0) return; 
+            
+            isInteractive = false; 
+
+            btnCatch.style.color = '#000';
+            setTimeout(() => { btnCatch.style.color = ''; }, 200);
+
+            if (activeBlockId) {
+                const oldBlock = document.getElementById(activeBlockId);
+                if (oldBlock) {
+                    oldBlock.classList.remove('active');
+                    renderBlock(activeBlockId, false);
+                }
+                activeBlockId = null;
+                inputField.blur();
+            }
+            if (hint) hint.style.display = 'none';
+
+            const globalHeader = document.getElementById('global-header');
+            const draggableNav = document.getElementById('draggable-nav');
+            if (globalHeader) globalHeader.style.display = 'none';
+            if (draggableNav) draggableNav.style.display = 'none';
+
+            setTimeout(() => {
+                htmlToImage.toCanvas(canvasLayer, {
+                    backgroundColor: '#fafafa',
+                    pixelRatio: 2 
+                }).then(canvas => {
+                    
+                    const origW = canvas.width;
+                    const origH = canvas.height;
+
+                    let targetW, targetH;
+                    let sx = 0, sy = 0;
+
+                    if (origW / origH > 1.5) {
+                        targetH = origH;
+                        targetW = targetH * 1.5;
+                        sx = (origW - targetW) / 2;
+                    } else {
+                        targetW = origW;
+                        targetH = targetW / 1.5;
+                        sy = (origH - targetH) / 2;
+                    }
+
+                    const cropCanvas = document.createElement('canvas');
+                    cropCanvas.width = targetW;
+                    cropCanvas.height = targetH;
+                    const ctx = cropCanvas.getContext('2d');
+                    ctx.fillStyle = '#fafafa';
+                    ctx.fillRect(0, 0, targetW, targetH);
+                    
+                    ctx.drawImage(canvas, sx, sy, targetW, targetH, 0, 0, targetW, targetH);
+
+                    const fullDataUrl = cropCanvas.toDataURL('image/jpeg', 0.95);
+                    currentImageBase64 = fullDataUrl.split(',')[1];
+                    
+                    if(db) {
+                        const transaction = db.transaction(["snapshots"], "readwrite");
+                        const store = transaction.objectStore("snapshots");
+                        store.add({
+                            image: fullDataUrl,
+                            timestamp: Date.now()
+                        });
+                    }
+
+                    if (globalHeader) globalHeader.style.display = '';
+                    if (draggableNav) draggableNav.style.display = '';
+
+                    postcardStack.innerHTML = `<img src="${fullDataUrl}" style="width: 100%; height: auto; display: block; box-shadow: 0 10px 40px rgba(0,0,0,0.15);">`;
+
+                    emailOverlay.style.display = 'flex';
+                    userEmailInput.value = '';
+                    setTimeout(() => userEmailInput.focus(), 100);
+                }).catch(err => {
+                    console.error('Capture failed:', err);
+                });
+            }, 50);
+        });
+
+        // =========================================
+        // 发送与取消
+        // =========================================
+        cancelEmailBtn.addEventListener('click', () => {
+            emailOverlay.style.display = 'none';
+            isInteractive = true; 
+            resetCanvas();
+        });
+
+        sendEmailBtn.addEventListener('click', () => {
+            const email = userEmailInput.value.trim();
+            if (!email || !email.includes('@')) {
+                alert("please enter a valid email address.");
+                return;
+            }
+
+            sendEmailBtn.textContent = 'sending...';
+            sendEmailBtn.style.opacity = '0.5';
+            sendEmailBtn.disabled = true;
+
+            const formData = new FormData();
+            formData.append('image', currentImageBase64);
+
+            fetch(`https://api.imgbb.com/1/upload?key=${IMG_BB_API_KEY}`, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if(data.success) {
+                    const imageUrl = data.data.url;
+                    downloadToLocalHardDrive(currentImageBase64);
+
+                    // 💡 随机抽取一张背面图
+                    const randomBackImageUrl = backImages[Math.floor(Math.random() * backImages.length)];
+
+                    const templateParams = {
+                        to_email: email,       
+                        image_url: imageUrl, 
+                        back_image_url: randomBackImageUrl 
+                    };
+                    return emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams);
+                } else {
+                    throw new Error('Image upload failed');
+                }
+            })
+            .then(() => {
+                emailOverlay.style.display = 'none';
+                sendEmailBtn.textContent = 'send';
+                sendEmailBtn.style.opacity = '1';
+                sendEmailBtn.disabled = false;
+                isInteractive = true; 
+                resetCanvas();
+            })
+            .catch(error => {
+                console.error('Mailing failed:', error);
+                sendEmailBtn.textContent = 'failed. try again';
+                sendEmailBtn.style.opacity = '1';
+                sendEmailBtn.disabled = false;
+            });
+        });
+
+        // =========================================
+        // Gallery
+        // =========================================
+        btnGallery.addEventListener('click', () => {
+            isInteractive = false; 
+            galleryGrid.innerHTML = ''; 
+            
+            const globalHeader = document.getElementById('global-header');
+            const draggableNav = document.getElementById('draggable-nav');
+            if (globalHeader) globalHeader.style.display = 'none';
+            if (draggableNav) draggableNav.style.display = 'none';
+            
+            if(db) {
+                const transaction = db.transaction(["snapshots"], "readonly");
+                const store = transaction.objectStore("snapshots");
+                const request = store.getAll(); 
+
+                request.onsuccess = () => {
+                    const records = request.result;
+                    records.reverse().forEach(record => {
+                        const itemDiv = document.createElement('div');
+                        itemDiv.className = 'gallery-item';
+                        
+                        const img = document.createElement('img');
+                        img.src = record.image;
+                        
+                        const delBtn = document.createElement('button');
+                        delBtn.className = 'delete-btn';
+                        delBtn.innerHTML = '&#10005;'; 
+                        
+                        delBtn.addEventListener('click', (e) => {
+                            e.stopPropagation(); 
+                            if (confirm('Delete this catch? (确定要删除这张存档吗？)')) {
+                                const tx = db.transaction(["snapshots"], "readwrite");
+                                const objStore = tx.objectStore("snapshots");
+                                objStore.delete(record.id);
+                                tx.oncomplete = () => {
+                                    itemDiv.style.transform = 'scale(0.8)';
+                                    itemDiv.style.opacity = '0';
+                                    setTimeout(() => itemDiv.remove(), 300);
+                                };
+                            }
+                        });
+                        
+                        itemDiv.addEventListener('click', () => {
+                            lightbox.querySelector('img').src = record.image;
+                            lightbox.style.display = 'flex';
+                        });
+
+                        itemDiv.appendChild(img);
+                        itemDiv.appendChild(delBtn); 
+                        galleryGrid.appendChild(itemDiv);
+                    });
+                    
+                    galleryOverlay.classList.add('open');
+                    closeGallery.style.display = 'block';
+                };
+            }
+        });
+
+        closeGallery.addEventListener('click', () => {
+            galleryOverlay.classList.remove('open');
+            closeGallery.style.display = 'none';
+            isInteractive = true; 
+            
+            const globalHeader = document.getElementById('global-header');
+            const draggableNav = document.getElementById('draggable-nav');
+            if (globalHeader) globalHeader.style.display = '';
+            if (draggableNav) draggableNav.style.display = '';
+        });
+
+        lightbox.addEventListener('click', () => {
+            lightbox.style.display = 'none';
+        });
+
+    </script>
+</body>
+</html>
