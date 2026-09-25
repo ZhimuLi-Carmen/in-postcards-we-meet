@@ -72,8 +72,8 @@ const postcardPool = [
   },
   {
     id: 15,
-    cn: "你好，每当我抽到一个来自中国的地址时，我总是非常开心！我的女儿是从中国收养的，我也曾多次访问中国。现在我们正在再次前往香港和中国大陆旅行。来自林妮特·范德霍夫的问候。我的地址是：荷兰鹿特丹。",
-    en: "Hello, I am always happy when I get an address in China for a postcard! My daughter is adopted from China and I visited the country several times. And in now, we making a trip to Hongkong and China again. Greeting from Linette van der Hoof & Zonneblaem staat 61 365 IST Rotterdam, The Netherlands."
+    cn: "你好，每当我抽到一个来自中国的地址时，我总是非常开心！我的女儿是从中国收养的，我也曾多次访问中国。现在我们正在再次前往香港和中国大陆旅行。来自林妮特·范德霍夫的问候。",
+    en: "Hello, I am always happy when I get an address in China for a postcard! My daughter is adopted from China and I visited the country several times. And in now, we making a trip to Hongkong and China again."
   },
   {
     id: 16,
